@@ -1,0 +1,18 @@
+# Core training dependencies
+torch>=2.1.0
+numpy>=1.24.0
+
+# Tokenisation (used by eval.py, sample.py, sample_batch.py)
+tiktoken>=0.5.0
+
+# Dataset download (used by data/rocstories/prepare.py)
+datasets>=2.14.0
+
+# HuggingFace upload (used by hf_load.py)
+huggingface_hub>=0.19.0
+
+# Optional: Weights & Biases logging (set wandb_log=True in config)
+# wandb>=0.15.0
+
+# Optional: transformers (only needed for GPT.from_pretrained())
+# transformers>=4.35.0
