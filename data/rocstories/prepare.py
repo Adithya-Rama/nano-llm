@@ -33,13 +33,11 @@ Usage:
 Outputs:
     data/rocstories/train.bin   (plain, default)
     data/rocstories/val.bin
-    -- or with --structured --out_dir data/rocstories_structured --
-    data/rocstories_structured/train.bin
-    data/rocstories_structured/val.bin
 """
 
 import os
 import sys
+import re
 import argparse
 import numpy as np
 import tiktoken
@@ -48,55 +46,85 @@ import tiktoken
 VAL_FRACTION  = 0.1     # fraction of stories held out for validation
 SEED          = 42
 MIN_WORDS     = 10      # filter stories that are suspiciously short
+
+# Primary: plain-text dataset (each row is a full story in one text field)
 HF_DATASET    = "mintujupally/ROCStories"
-# Fallback dataset slug if the primary one is unavailable
+
+# Fallback: tabular dataset with individual sentence columns
 HF_FALLBACK   = "Sharathhebbar24/ROCStories"
 # -----------------------------------------------------------------------------
 
 
-def _extract_sentences(row):
-    """Extract title and individual sentences from a dataset row."""
-    title = (row.get('storytitle', '') or row.get('title', '') or '').strip()
+def _split_into_sentences(text):
+    """Heuristically split a paragraph into sentences on . ! ?"""
+    parts = re.split(r'(?<=[.!?])\s+', text.strip())
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _row_to_plain_text_format(row):
+    """
+    Convert one dataset row to plain text story.
+    Handles two dataset schemas:
+      1. Plain-text schema: single 'text' column with full story
+      2. Tabular schema:    sentence1, sentence2, ..., sentence5 columns
+    """
+    # Schema 1: plain text (mintujupally/ROCStories)
+    raw = (row.get('text', '') or '').strip()
+    if raw:
+        return raw  # already a full story string
+
+    # Schema 2: tabular sentences (Sharathhebbar24/ROCStories)
     sentences = []
-    for key in ['sentence1', 'sentence2', 'sentence3', 'sentence4', 'sentence5']:
+    for key in ['sentence1', 'sentence2', 'sentence3', 'sentence4', 'sentence5',
+                'Sentence1', 'Sentence2', 'Sentence3', 'Sentence4', 'Sentence5']:
         val = row.get(key, '') or ''
         val = val.strip()
         if val:
             sentences.append(val)
 
-    # Some versions expose a single 'story' column
-    if not sentences:
-        story_col = row.get('story', '') or ''
-        if story_col.strip():
-            # Try to split into sentences (rough heuristic)
-            import re
-            parts = re.split(r'(?<=[.!?])\s+', story_col.strip())
-            sentences = [p.strip() for p in parts if p.strip()]
+    if sentences:
+        title = (row.get('storytitle', '') or row.get('title', '') or
+                 row.get('StoryTitle', '') or '').strip()
+        story_body = ' '.join(sentences)
+        if title:
+            return f"{title}\n{story_body}"
+        return story_body
 
-    return title, sentences
+    # Schema 3: single 'story' column
+    story_col = (row.get('story', '') or '').strip()
+    if story_col:
+        return story_col
 
-
-def _row_to_plain(row):
-    """Convert a row to plain text format: Title\\nSentence1 Sentence2 ..."""
-    title, sentences = _extract_sentences(row)
-    if not sentences:
-        return ''
-    story_body = ' '.join(sentences)
-    if title:
-        return f"{title}\n{story_body}"
-    return story_body
+    return ''
 
 
 def _row_to_structured(row):
-    """Convert a row to structured format with explicit sentence markers."""
-    title, sentences = _extract_sentences(row)
+    """
+    Convert one dataset row to structured format with explicit sentence markers.
+    <story><title>...</title><s1>...</s1>...<s5>...</s5></story>
+    """
+    raw = (row.get('text', '') or '').strip()
+    if raw:
+        # Plain text: split into sentences heuristically
+        sentences = _split_into_sentences(raw)
+        title = ''
+    else:
+        # Tabular: extract individually
+        title = (row.get('storytitle', '') or row.get('title', '') or '').strip()
+        sentences = []
+        for key in ['sentence1', 'sentence2', 'sentence3', 'sentence4', 'sentence5']:
+            val = row.get(key, '') or ''
+            val = val.strip()
+            if val:
+                sentences.append(val)
+
     if not sentences:
         return ''
 
     parts = ["<story>"]
     if title:
         parts.append(f"<title>{title}</title>")
-    for i, sent in enumerate(sentences, 1):
+    for i, sent in enumerate(sentences[:5], 1):
         parts.append(f"<s{i}>{sent}</s{i}>")
     parts.append("</story>")
     return "\n".join(parts)
@@ -111,20 +139,25 @@ def load_rocstories(structured=False):
         print("  Install it with:  pip install datasets")
         sys.exit(1)
 
-    formatter = _row_to_structured if structured else _row_to_plain
+    formatter = _row_to_structured if structured else _row_to_plain_text_format
     format_name = "structured" if structured else "plain"
 
     stories = []
     for slug in [HF_DATASET, HF_FALLBACK]:
         try:
             print(f"[prepare] Trying to load: {slug} ...")
-            ds = load_dataset(slug, split="train", trust_remote_code=True)
+            # NOTE: trust_remote_code removed — deprecated in datasets >= 2.20
+            ds = load_dataset(slug, split="train")
+            print(f"[prepare] Columns: {ds.column_names}")
             for row in ds:
                 text = formatter(row)
                 if text and len(text.split()) >= MIN_WORDS:
                     stories.append(text)
-            print(f"[prepare] Loaded {len(stories):,} stories from {slug} ({format_name} format)")
-            return stories
+            if stories:
+                print(f"[prepare] Loaded {len(stories):,} stories from {slug} ({format_name} format)")
+                return stories
+            else:
+                print(f"  [warn] {slug} loaded but extracted 0 stories — unexpected schema, trying fallback")
         except Exception as e:
             print(f"  [warn] Could not load {slug}: {e}")
 
@@ -135,9 +168,9 @@ def load_rocstories(structured=False):
         csv_path = os.path.join(script_dir, fname)
         if os.path.exists(csv_path):
             print(f"[prepare] Reading local CSV: {csv_path}")
-            import csv
+            import csv as csv_mod
             with open(csv_path, newline='', encoding='utf-8') as f:
-                reader = csv.DictReader(f)
+                reader = csv_mod.DictReader(f)
                 for row in reader:
                     text = formatter(row)
                     if text and len(text.split()) >= MIN_WORDS:
@@ -173,6 +206,9 @@ def tokenise_and_save(stories, out_dir):
     val_stories   = [stories[i] for i in val_idx]
 
     print(f"[prepare] Split: {len(train_stories):,} train | {len(val_stories):,} val")
+
+    # Print a sample story for verification
+    print(f"\n[prepare] Sample story:\n{stories[0][:300]}\n")
 
     def encode_split(split_stories, name):
         all_tokens = []

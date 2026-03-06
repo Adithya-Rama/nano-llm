@@ -49,7 +49,7 @@ def load_tinystories():
 
     stories = []
     try:
-        ds = load_dataset(HF_DATASET, split="train", trust_remote_code=True)
+        ds = load_dataset(HF_DATASET, split="train")
         for row in ds:
             # TinyStories has a 'text' column
             text = (row.get('text', '') or '').strip()
