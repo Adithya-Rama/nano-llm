@@ -275,7 +275,7 @@ def get_lr(it):
 # Atomic checkpoint saving (Colab-resilient)
 # ---------------------------------------------------------------------------
 def save_checkpoint(tag=None):
-    """Save checkpoint with atomic write to prevent corruption."""
+    """Save checkpoint. Uses direct write on Google Drive, atomic write otherwise."""
     raw = model.module if ddp else model
     ckpt = {
         'model': raw.state_dict(),
@@ -289,16 +289,28 @@ def save_checkpoint(tag=None):
     }
     fname = 'ckpt.pt' if tag is None else f'ckpt_{tag}.pt'
     final_path = os.path.join(out_dir, fname)
-    tmp_path = final_path + '.tmp'
     print(f"saving checkpoint to {final_path}")
-    torch.save(ckpt, tmp_path)
-    os.replace(tmp_path, final_path)  # atomic on most filesystems
+    # Detect Google Drive mount — avoid atomic .tmp writes that cause
+    # duplicate files on Drive's FUSE filesystem
+    on_drive = os.path.realpath(out_dir).startswith('/content/drive')
+    if on_drive:
+        # Write directly to final path (Drive handles durability)
+        torch.save(ckpt, final_path)
+    else:
+        # Atomic write via temp file (for local filesystem / Colab scratch)
+        tmp_path = final_path + '.tmp'
+        torch.save(ckpt, tmp_path)
+        os.replace(tmp_path, final_path)
     # Also always update the main ckpt.pt if this is a tagged save
     if tag is not None:
         main_path = os.path.join(out_dir, 'ckpt.pt')
-        main_tmp = main_path + '.tmp'
-        torch.save(ckpt, main_tmp)
-        os.replace(main_tmp, main_path)
+        print(f"saving checkpoint to {main_path}")
+        if on_drive:
+            torch.save(ckpt, main_path)
+        else:
+            main_tmp = main_path + '.tmp'
+            torch.save(ckpt, main_tmp)
+            os.replace(main_tmp, main_path)
 
 # ---------------------------------------------------------------------------
 # SIGTERM handler for Colab preemption

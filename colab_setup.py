@@ -176,29 +176,15 @@ import os
 # ── Config: match whichever config you want to train ────────────────────────
 CONFIG_FILE  = "config/train_rocstories_combined.py"  # ← change if needed
 OUT_DIR      = "out-rocstories-combined"              # ← must match config
-DRIVE_CKPT   = "/content/drive/MyDrive/nanogpt_rocstories_checkpoints"
 
-os.chdir("/content/nanogpt_project/nanoGPT_code/nanoGPT")
+os.chdir(LOCAL_DIR)
 
 # ── Locations to check for an existing checkpoint ───────────────────────────
 local_ckpt = os.path.join(OUT_DIR, "ckpt.pt")
-drive_ckpt = os.path.join(DRIVE_CKPT, "ckpt.pt")
 
 if os.path.exists(local_ckpt):
     INIT_FROM = "resume"
-    print(f"✓ Checkpoint found locally:  {local_ckpt}")
-elif os.path.exists(drive_ckpt):
-    # Restore from Drive into the expected out-dir so train.py can find it
-    os.makedirs(OUT_DIR, exist_ok=True)
-    import shutil
-    shutil.copy(drive_ckpt, local_ckpt)
-    INIT_FROM = "resume"
-    print(f"✓ Checkpoint restored from Drive → {local_ckpt}")
-    # Also copy train_log.jsonl if present (for learning-curve continuity)
-    drive_log = os.path.join(DRIVE_CKPT, "train_log.jsonl")
-    if os.path.exists(drive_log):
-        shutil.copy(drive_log, os.path.join(OUT_DIR, "train_log.jsonl"))
-        print("  (train_log.jsonl restored too)")
+    print(f"✓ Checkpoint found:  {local_ckpt}")
 else:
     INIT_FROM = "scratch"
     print("ℹ  No checkpoint found — will train from scratch.")
@@ -244,20 +230,6 @@ except NameError:
 print(f"\n→ Running: python train.py {CONFIG_FILE} --init_from={INIT_FROM}\n")
 
 !python train.py {CONFIG_FILE} --init_from={INIT_FROM}
-
-# ── Backup checkpoint to Drive after training finishes ───────────────────────
-DRIVE_CKPT = "/content/drive/MyDrive/nanogpt_rocstories_checkpoints"
-if os.path.exists(os.path.join(OUT_DIR, "ckpt.pt")):
-    import shutil
-    os.makedirs(DRIVE_CKPT, exist_ok=True)
-    try:
-        shutil.copy(os.path.join(OUT_DIR, "ckpt.pt"), os.path.join(DRIVE_CKPT, "ckpt.pt"))
-        log_src = os.path.join(OUT_DIR, "train_log.jsonl")
-        if os.path.exists(log_src):
-            shutil.copy(log_src, os.path.join(DRIVE_CKPT, "train_log.jsonl"))
-        print(f"✓ Checkpoint backed up to Drive: {DRIVE_CKPT}")
-    except shutil.SameFileError:
-        print("✓ Checkpoint already on Drive (repo is on Drive) — no backup needed")
 
 print("✓ Training complete (or interrupted — re-run to resume)")
 """
