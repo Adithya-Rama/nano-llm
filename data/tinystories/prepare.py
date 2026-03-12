@@ -30,7 +30,7 @@ import tiktoken
 # ── Hyper-parameters ──────────────────────────────────────────────────────────
 VAL_FRACTION  = 0.05     # 5% validation (TinyStories is large)
 SEED          = 42
-MAX_STORIES   = 500000   # Cap at 500K stories to keep data manageable
+MAX_STORIES   = 2100000   # Cap at 500K stories to keep data manageable
 HF_DATASET    = "roneneldan/TinyStories"
 # ─────────────────────────────────────────────────────────────────────────────
 
