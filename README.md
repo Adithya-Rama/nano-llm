@@ -1,99 +1,107 @@
-# nanoGPT — Enhanced LLaMA-Style Story Generator
+# nanoGPT — ROCStories Mini-Project (COMP4680/8650)
 
-Modern LLaMA-style transformer for ROCStories story generation, built on [nanoGPT](https://github.com/karpathy/nanoGPT).
+This repo contains a complete, assignment-compliant nanoGPT pipeline for **ROCStories story generation**.
 
-## Architecture
+## Constraints (important)
 
-**~152M parameter** model with modern enhancements:
+- **Tasks 1–3 must use ≤ 32M parameters** (including the model uploaded to HuggingFace).
+- **Task 1 baseline must follow the official nanoGPT “baby GPT” config**:
+  `n_layer=6`, `n_head=6`, `n_embd=384` (≈ **30.2M** params).
+- **Task 4 (arena competition)** may use larger models (optional).
 
-| Component | Implementation |
-|---|---|
-| Normalisation | RMSNorm (pre-norm) |
-| Positional encoding | Rotary (RoPE) |
-| Feed-forward | SwiGLU (gated activation) |
-| Attention stability | **QK-Norm** (Gemma 2, 2024) |
-| Attention kernel | Flash Attention via `F.scaled_dot_product_attention` |
-| Embeddings | Tied input/output |
-| Training loss | Label smoothing (0.1) |
-| Generation | Top-k + Top-p + Repetition penalty |
+## What to run
 
-**Config:** 12 layers, 12 heads, 768-dim, block_size=256
+The recommended entry point is the notebook:
 
-## Quick Start
+- `code_v2.ipynb`: clean, cell-by-cell workflow for Task 1 → Task 2 → Task 3 (+ optional Task 4)
+
+## Model variants in this repo
+
+### Task 1 baseline (vanilla nanoGPT, ≤32M)
+
+- **Config:** `config/train_t1_baseline.py`
+- **Model size:** ~30.2M params (6L/6H/384D)
+- **Architecture:** learned positional embeddings, LayerNorm, GELU MLP
+
+### Task 2 ablations (≤32M, controlled comparison)
+
+All at 6L/6H/384D with identical training hyperparameters:
+
+| Config | Change | Output dir |
+|---|---|---|
+| `config/train_t2_ablation_a.py` | A. Vanilla reference | `out-t2-vanilla` |
+| `config/train_t2_ablation_b.py` | B. +RoPE | `out-t2-rope` |
+| `config/train_t2_ablation_c.py` | C. +RMSNorm + SwiGLU | `out-t2-ffn` |
+| `config/train_t2_ablation_d.py` | D. +QK-Norm (novel) | `out-t2-qknorm` |
+| `config/train_t2_ablation_e.py` | E. All modern combined | `out-t2-all-modern` |
+
+### Task 3 best submission (≤32M)
+
+- **Config:** `config/train_t3_best.py`
+- **Model size:** ~30.1M params (6L/6H/384D, all-modern)
+- **Dataset:** `data/mixed/` (mixed continuation + instruction + structured)
+- **Purpose:** best checkpoint to upload to HuggingFace for grading
+
+### Task 4 arena model (optional, >32M allowed)
+
+- **Config:** `config/train_t4_arena.py`
+- **Model size:** ~152M params (12L/12H/768D)
+- **Dataset:** `data/combined/` (ROCStories + TinyStories)
+- **Warning:** do **not** upload this model for Task 3 grading.
+
+## Quick start (CLI)
 
 ```bash
-# 1. Install dependencies
+# 1) Install dependencies
 pip install tiktoken datasets huggingface_hub
 
-# 2. Prepare datasets
-python data/rocstories/prepare.py         # Required
-python data/tinystories/prepare.py        # Optional (extra data)
-python data/combined/prepare.py           # Optional (merged)
+# 2) Prepare ROCStories (required)
+python data/rocstories/prepare.py
 
-# 3. Train (ROCStories only — Task 1)
-python train.py config/train_rocstories.py
+# 3) Train Task 1 baseline (≤32M)
+python train.py config/train_t1_baseline.py
 
-# 4. Train (combined data — best for Task 3)
-python train.py config/train_rocstories_combined.py
-
-# 5. Resume after crash
-python train.py config/train_rocstories.py --init_from=resume
-
-# 6. Evaluate (perplexity)
-python eval.py --init_from=resume --out_dir=out-rocstories \
+# 4) Evaluate perplexity
+python eval.py --init_from=resume --out_dir=out-t1-baseline \
     --input_file=data/rocstories/eval_stories.txt
 
-# 7. Generate samples
-python sample_batch.py --init_from=resume --out_dir=out-rocstories \
-    --start="FILE:data/rocstories/eval_prompts.txt" \
-    --batch_prompts=True --max_new_tokens=200
+# 5) Task 2 datasets (optional but recommended for experiments)
+python data/rocstories/prepare.py --structured
+python data/tinystories/prepare.py
 
-# 8. Run 5-way ablation (Task 2)
-python train.py config/train_rocstories_baseline.py         # A. Vanilla GPT
-python train.py config/train_rocstories_rope_only.py        # B. +RoPE
-python train.py config/train_rocstories_rmsnorm_swiglu.py   # C. +RMSNorm+SwiGLU
-python train.py config/train_rocstories_qknorm.py           # D. +QK-Norm
-python train.py config/train_rocstories.py                  # E. All modern
+# 6) Build mixed instruction dataset (Task 2/3)
+python data/mixed/prepare.py
 
-# 9. Upload to HuggingFace (Task 3)
+# 7) Train Task 3 best model (≤32M) on mixed dataset
+python train.py config/train_t3_best.py
+
+# 8) Evaluate Task 3 perplexity on the public test set
+python eval.py --init_from=resume --out_dir=out-t3-best \
+    --input_file=data/rocstories/eval_stories.txt
+
+# 9) Upload to HuggingFace (Task 3)
 python hf_load.py upload --local-dir submission_hf \
     --repo-id YOUR_USERNAME/nanoGPT_hw --token YOUR_TOKEN
 ```
 
-## Colab Training
+## Colab
 
-See `colab_setup.py` for a step-by-step Colab guide. Key features:
+Use `code_v2.ipynb` as the clean, report-ready Colab notebook.
 
-- **SIGTERM handler**: Saves checkpoint on Colab preemption
-- **Time-based saves**: Every 15 minutes regardless of step count
-- **Atomic writes**: No checkpoint corruption from partial writes
-- **GradScaler state**: Full resume fidelity for float16 training
-- **JSONL logs**: Structured training logs for plotting
+## Sampling parameters
 
-## Configuration Files
+`sample_params.json` (used by `sample_batch.py` if you pass it through your wrapper):
 
-| Config | Architecture | Purpose |
-|---|---|---|
-| `train_rocstories.py` | All modern (152M) | Task 1 + Task 3 |
-| `train_rocstories_combined.py` | All modern (152M) | Task 3 (best) |
-| `train_rocstories_baseline.py` | Vanilla GPT | Task 2 Ablation A |
-| `train_rocstories_rope_only.py` | +RoPE only | Task 2 Ablation B |
-| `train_rocstories_rmsnorm_swiglu.py` | +RMSNorm+SwiGLU | Task 2 Ablation C |
-| `train_rocstories_qknorm.py` | +QK-Norm only | Task 2 Ablation D |
-
-## Sampling Parameters
-
-`sample_params.json`:
 ```json
 {"temperature": 0.75, "top_k": 50, "top_p": 0.9, "repetition_penalty": 1.2}
 ```
 
 ## References
 
-- Karpathy, A. (2023). nanoGPT. GitHub.
-- Touvron et al. (2023). LLaMA: Open and Efficient Foundation Language Models.
-- Su et al. (2021). RoFormer: Enhanced Transformer with Rotary Position Embedding.
-- Shazeer (2020). GLU Variants Improve Transformer.
-- Team et al. (2024). Gemma 2: Improving Open Language Models. (QK-Norm)
-- Eldan & Li (2023). TinyStories: How Small Can Language Models Be.
+- Karpathy, A. nanoGPT. `https://github.com/karpathy/nanoGPT`
 - Mostafazadeh et al. (2016). ROCStories Corpus.
+- Su et al. (2022). RoFormer / RoPE. arXiv:2104.09864.
+- Zhang & Sennrich (2019). RMSNorm. arXiv:1910.07467.
+- Shazeer (2020). GLU variants / SwiGLU. arXiv:2002.05202.
+- Henry et al. (2020). Query-Key Normalization. arXiv:2010.04245.
+

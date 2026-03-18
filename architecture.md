@@ -1,49 +1,137 @@
-# NanoGPT Enhanced Architecture — Complete System Design
+# NanoGPT Architecture & Experiments (Assignment-Compliant)
 
-## Executive Summary
+This document summarises the architecture choices and experiment design for the ROCStories nanoGPT mini-project.
 
-Upgrade from the current **~59M parameter** model to a **~152M parameter** LLaMA-style transformer for ROCStories generation. The enhanced model includes novel architectural improvements (QK-Norm, label smoothing, repetition penalty), bullet-proof Colab checkpointing, combined dataset training, and longer training — all designed to minimize perplexity and maximize Qwen story quality scores for Task 3.
+## Executive Summary (what changed)
+
+Earlier iterations explored a **~152M parameter** LLaMA-style transformer. Per the professor’s revised instructions, **Tasks 1–3 (including the model uploaded to HuggingFace) must not exceed 32M parameters**.
+
+Therefore, the graded pipeline is now built around the official nanoGPT **“baby GPT”** scale:
+
+- **Task 1 baseline**: vanilla nanoGPT at **6 layers / 6 heads / 384 embedding dim** (≈ **30.2M** params)
+- **Task 2 exploration**: controlled architecture ablations at the same ≤32M scale
+- **Task 3 submission**: best ≤32M model trained on a mixed continuation/instruction corpus (still ≤32M)
+
+The larger **152M** model is retained **only** for the optional arena competition (Task 4), where model size is allowed to exceed 32M.
 
 ---
 
-## 1. Model Architecture
+## 1. Models Used in This Repo
 
-### 1.1 Configuration Comparison (FINAL)
+### 1.1 Task 1 Baseline (official nanoGPT configuration)
 
-| Parameter | Current (~59M) | Enhanced (~152M) | Rationale |
-|---|---|---|---|
-| `n_layer` | 8 | 12 | More representational capacity |
-| `n_head` | 8 | 12 | More attention diversity |
-| `n_embd` | 512 | 768 | Standard GPT-2 small dim — matches GPT-2 width |
-| `head_dim` | 64 | 64 | Unchanged (768/12 = 64) |
-| `block_size` | 256 | 256 | ROCStories rarely > 150 tokens; keeps batch efficient |
-| `vocab_size` | 50304 | 50304 | GPT-2 BPE (tiktoken), padded to mult of 64 |
-| `dropout` | 0.1 | 0.1 (0.05 combined) | Regularization; lower with more data |
-| `bias` | False | False | Modern practice |
-| SwiGLU hidden | 4×n_embd (2048) | 4×n_embd (3072) | Larger FFN for more capacity |
-| **Total params** | **~59M** | **~152M** | **~2.6× larger** |
+**Config:** `config/train_t1_baseline.py`
 
-### 1.2 Parameter Breakdown (~152M Model)
+| Hyperparameter | Value |
+|---|---|
+| `n_layer` | 6 |
+| `n_head` | 6 |
+| `n_embd` | 384 |
+| `block_size` | 256 |
+| `vocab_size` | 50,304 (GPT-2 BPE padded) |
+| **Total params** | **≈30.2M** (≤32M ✓) |
 
-```
-Component                        Parameters
-──────────────────────────────────────────────
-Token embedding (tied with lm_head): 50304 × 768  = 38.63M
-Per layer (×12):
-  c_attn (QKV)  : 768 × 2304     = 1.77M
-  c_proj (O)    : 768 × 768      = 0.59M
-  SwiGLU gate   : 768 × 3072     = 2.36M
-  SwiGLU up     : 768 × 3072     = 2.36M
-  SwiGLU down   : 3072 × 768     = 2.36M
-  2× RMSNorm    : 2 × 768        = 0.0015M
-  QK-Norm       : 2 × 64         = 0.0001M
-  Per-layer total:                = 9.44M
-12 layers:        12 × 9.44M     = 113.3M
-Final RMSNorm:                   = 0.0008M
-───────────────────────────────────────────────
-TOTAL (embedding counted once):    ~152M
-TOTAL (non-embedding):             ~113M
-```
+**Architecture:** vanilla nanoGPT (learned positional embeddings, LayerNorm, GELU MLP).
+
+### 1.2 Task 2 Ablations (≤32M, controlled study)
+
+All ablations keep **exactly the same model scale** (6L/6H/384D) and training schedule to isolate architectural effects.
+
+| Ablation | Config | Change |
+|---|---|---|
+| A | `config/train_t2_ablation_a.py` | Vanilla reference |
+| B | `config/train_t2_ablation_b.py` | +RoPE |
+| C | `config/train_t2_ablation_c.py` | +RMSNorm + SwiGLU |
+| D | `config/train_t2_ablation_d.py` | +QK-Norm (novel) |
+| E | `config/train_t2_ablation_e.py` | All modern combined |
+
+### 1.3 Task 3 Best Submission (≤32M + mixed instruction data)
+
+**Config:** `config/train_t3_best.py`  
+**Model:** 6L/6H/384D with all-modern flags enabled (RoPE + RMSNorm + SwiGLU + QK-Norm)  
+**Dataset:** `data/mixed/` (see §2.2)
+
+This is the model intended for **HuggingFace upload and grading** (Task 3), staying within 32M params.
+
+### 1.4 Task 4 Arena Model (optional, >32M allowed)
+
+**Config:** `config/train_t4_arena.py`  
+**Model:** 12L/12H/768D (≈152M)  
+**Dataset:** `data/combined/` (ROCStories + TinyStories)
+
+This model is **not** used for Tasks 1–3 submission due to the 32M limit.
+
+---
+
+## 2. Dataset Design
+
+### 2.1 ROCStories (Task 1 and ablations)
+
+`data/rocstories/prepare.py` produces plain ROCStories `train.bin` / `val.bin` with:
+
+- GPT-2 BPE tokenisation (`tiktoken`)
+- `<|endoftext|>` as a story separator token (id 50256)
+- fixed-seed split (seed=42)
+
+### 2.2 Mixed instruction + continuation dataset (Task 2/3 experiment)
+
+To study instruction capability without harming continuation perplexity, we train on a mixed corpus built from ROCStories:
+
+- **55%** plain continuation (dominant; matches evaluation mode)
+- **30%** instruction-prefixed examples (e.g., “Write a short story about: …”)
+- **15%** structured XML story tags (`<story><s1>…</s1>…</story>`)
+
+Implemented in `data/mixed/prepare.py`.
+
+**Important design choice:** the **validation split remains plain ROCStories only**, so perplexity is comparable with Task 1 and the ablation baselines.
+
+---
+
+## 3. Architectural Components (what each change does)
+
+### 3.1 RoPE (Rotary Position Embedding)
+
+Replaces learned absolute positional embeddings with a relative-position mechanism that often generalises better.
+
+### 3.2 RMSNorm + SwiGLU
+
+Two LLaMA-style modernisations that change normalisation and FFN gating. In this codebase, SwiGLU uses the standard 8/3 hidden scaling so the parameter count remains comparable.
+
+### 3.3 QK-Norm (Query-Key Normalisation) — Novelty in our Task 2 write-up
+
+Applies a per-head normalisation to Q and K before attention logits are computed. This targets attention-logit instability and is treated as the main novel architectural component explored in Task 2.
+
+---
+
+## 4. Reproducible Execution Order
+
+The simplest end-to-end path is the notebook `code_v2.ipynb`.
+
+CLI-only (high level):
+
+1. Task 1 baseline:
+   - `python data/rocstories/prepare.py`
+   - `python train.py config/train_t1_baseline.py`
+   - `python eval.py --init_from=resume --out_dir=out-t1-baseline --input_file=data/rocstories/eval_stories.txt`
+2. Task 2 ablations:
+   - run `config/train_t2_ablation_{a..e}.py`
+3. Task 3 best submission:
+   - `python data/mixed/prepare.py`
+   - `python train.py config/train_t3_best.py`
+4. Task 4 arena (optional):
+   - `python data/combined/prepare.py`
+   - `python train.py config/train_t4_arena.py`
+
+---
+
+## References (for report citations)
+
+- Karpathy, A. nanoGPT. `https://github.com/karpathy/nanoGPT`
+- Mostafazadeh et al. (2016). ROCStories Corpus.
+- Su et al. (2022). RoPE / RoFormer. arXiv:2104.09864.
+- Zhang & Sennrich (2019). RMSNorm. arXiv:1910.07467.
+- Shazeer (2020). GLU variants / SwiGLU. arXiv:2002.05202.
+- Henry et al. (2020). Query-Key Normalization. arXiv:2010.04245.
 
 ### 1.3 Novel Enhancements
 

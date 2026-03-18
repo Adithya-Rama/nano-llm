@@ -1,0 +1,60 @@
+# ============================================================
+# config/train_t2_ablation_a.py
+#
+# TASK 2 — Ablation A: Vanilla GPT (reference point)
+#
+# Same architecture as Task 1 baseline but trained for
+# 10,000 steps to match the other ablation experiments.
+# Serves as the reference for measuring the gain from each
+# architectural modification in Ablations B–E.
+#
+# Model: ~30.2M params  (within 32M constraint)
+# ============================================================
+
+out_dir               = 'out-t2-vanilla'
+eval_interval         = 250
+log_interval          = 10
+eval_iters            = 100
+always_save_checkpoint = True
+init_from             = 'scratch'
+
+wandb_log      = False
+wandb_project  = 'rocstories-ablations'
+wandb_run_name = 't2-ablation-a-vanilla'
+
+dataset = 'rocstories'
+
+gradient_accumulation_steps = 4
+batch_size  = 32
+block_size  = 256
+
+n_layer  = 6
+n_head   = 6
+n_embd   = 384
+dropout  = 0.1
+bias     = False
+
+use_rmsnorm = False
+use_rope    = False
+use_swiglu  = False
+use_qk_norm = False
+
+label_smoothing = 0.1
+
+learning_rate = 6e-4
+max_iters     = 10000
+weight_decay  = 0.1
+beta1 = 0.9
+beta2 = 0.95
+grad_clip = 1.0
+
+decay_lr       = True
+warmup_iters   = 200
+lr_decay_iters = 10000
+min_lr         = 6e-5
+
+ckpt_interval_secs = 900
+
+device  = 'cuda'
+dtype   = 'bfloat16'
+compile = True
