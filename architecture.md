@@ -1,489 +1,289 @@
-# NanoGPT Architecture & Experiments (Assignment-Compliant)
+# NanoGPT Architecture & Experiments (COMP4680/8650)
 
-This document summarises the architecture choices and experiment design for the ROCStories nanoGPT mini-project.
-
-## Executive Summary (what changed)
-
-Earlier iterations explored a **~152M parameter** LLaMA-style transformer. Per the professor’s revised instructions, **Tasks 1–3 (including the model uploaded to HuggingFace) must not exceed 32M parameters**.
-
-Therefore, the graded pipeline is now built around the official nanoGPT **“baby GPT”** scale:
-
-- **Task 1 baseline**: vanilla nanoGPT at **6 layers / 6 heads / 384 embedding dim** (≈ **30.2M** params)
-- **Task 2 exploration**: controlled architecture ablations at the same ≤32M scale
-- **Task 3 submission**: best ≤32M model trained on a mixed continuation/instruction corpus (still ≤32M)
-
-The larger **152M** model is retained **only** for the optional arena competition (Task 4), where model size is allowed to exceed 32M.
+This document is the definitive architecture reference for the ROCStories mini-project.
 
 ---
 
-## 1. Models Used in This Repo
+## Parameter Constraint
 
-### 1.1 Task 1 Baseline (official nanoGPT configuration)
+Per the professor's revised instructions:
 
-**Config:** `config/train_t1_baseline.py`
+> "The above 32M constraint applies to Task 1, Task 2, **including the model you submit to HuggingFace**."
 
-| Hyperparameter | Value |
+**All graded work (Tasks 1–3) must use ≤ 32M parameters.**
+The 152M arena model is kept for **Task 4 (competition only)** where size is unconstrained.
+
+---
+
+## 1. Model Configurations
+
+### 1.1 Task 1 — Official Baseline
+
+**Config:** `config/train_t1_baseline.py`  
+**Output dir:** `out-t1-baseline/`
+
+Follows the official nanoGPT "baby GPT" specification (Karpathy, 2022):
+
+| Parameter | Value | Notes |
+|---|---|---|
+| `n_layer` | 6 | as required by prof |
+| `n_head` | 6 | as required by prof |
+| `n_embd` | 384 | as required by prof |
+| `block_size` | 256 | context window |
+| `vocab_size` | 50,304 | GPT-2 BPE, padded to mult of 64 |
+| **Total params** | **≈ 30.2M** | ≤ 32M ✓ |
+| `dropout` | 0.1 | |
+| `bias` | False | |
+
+**Architecture:** vanilla nanoGPT — learned absolute positional embeddings, LayerNorm, GELU MLP.
+No modern modifications. This is the required baseline.
+
+**Training settings:**
+- `learning_rate` = 6e-4  (standard for ~30M GPT; Kaplan et al., 2020)
+- `max_iters` = 10,000  (~88 passes through ROCStories)
+- `batch_size` = 32 × `gradient_accumulation_steps` = 4  → 32,768 tokens/step
+- Cosine LR decay: 6e-4 → 6e-5
+- `label_smoothing` = 0.1
+
+**Estimated training time (A100):** ~8–10 min
+
+---
+
+### 1.2 Task 2 — Architecture Ablation Study
+
+**All five configs:** `config/train_t2_ablation_{a..e}.py`  
+**Output dirs:** `out-t2-{vanilla, rope, ffn, qknorm, all-modern}/`
+
+All ablations use **identical hyperparameters** and the **same 6L/6H/384D scale** so that PPL differences are caused only by the architectural change. Total params remain ≈ 30.2M (≤ 32M ✓) in all cases.
+
+| Config | Change from vanilla | Param count |
+|---|---|---|
+| A — Vanilla | none (reference) | ≈ 30.2M |
+| B — +RoPE | replace learned PE with RoPE | ≈ 30.1M (−0.1M, no pos-emb) |
+| C — +RMSNorm+SwiGLU | replace LayerNorm/GELU | ≈ 30.2M (SwiGLU 8/3 scaling) |
+| D — +QK-Norm ★ | add Q/K normalisation | ≈ 30.2M (+768 negligible params) |
+| E — All Modern | B + C + D combined | ≈ 30.1M |
+
+★ **Novel contribution:** QK-Norm's effect on sub-32M narrative-generation models has not been previously studied.
+
+**Scientific narrative (Task 2 report):** we isolate three orthogonal modernisations — (i) positional encoding (RoPE), (ii) FFN/normalisation (RMSNorm+SwiGLU), and (iii) attention stability (QK-Norm) — and measure their individual and combined contributions to perplexity on short story text. QK-Norm has recently been adopted by Gemma 2 (2024) and Cohere Command-R but its impact on small models is unstudied.
+
+---
+
+### 1.3 Task 3 — Best Submission Model (≤ 32M, for HuggingFace)
+
+**Config:** `config/train_t3_best.py`  
+**Output dir:** `out-t3-best/`
+
+Uses the best architecture from Task 2 (E — All Modern) plus a mixed instruction/continuation training corpus.
+
+| Parameter | Value |
 |---|---|
 | `n_layer` | 6 |
 | `n_head` | 6 |
 | `n_embd` | 384 |
-| `block_size` | 256 |
-| `vocab_size` | 50,304 (GPT-2 BPE padded) |
-| **Total params** | **≈30.2M** (≤32M ✓) |
+| `use_rope` | True |
+| `use_rmsnorm` | True |
+| `use_swiglu` | True |
+| `use_qk_norm` | True |
+| **Total params** | **≈ 30.1M** (≤ 32M ✓) |
+| `dataset` | `mixed` |
+| `max_iters` | 15,000 |
+| `dropout` | 0.05 |
 
-**Architecture:** vanilla nanoGPT (learned positional embeddings, LayerNorm, GELU MLP).
+**Dataset:** `data/mixed/` — see §3.2 below.
 
-### 1.2 Task 2 Ablations (≤32M, controlled study)
+---
 
-All ablations keep **exactly the same model scale** (6L/6H/384D) and training schedule to isolate architectural effects.
-
-| Ablation | Config | Change |
-|---|---|---|
-| A | `config/train_t2_ablation_a.py` | Vanilla reference |
-| B | `config/train_t2_ablation_b.py` | +RoPE |
-| C | `config/train_t2_ablation_c.py` | +RMSNorm + SwiGLU |
-| D | `config/train_t2_ablation_d.py` | +QK-Norm (novel) |
-| E | `config/train_t2_ablation_e.py` | All modern combined |
-
-### 1.3 Task 3 Best Submission (≤32M + mixed instruction data)
-
-**Config:** `config/train_t3_best.py`  
-**Model:** 6L/6H/384D with all-modern flags enabled (RoPE + RMSNorm + SwiGLU + QK-Norm)  
-**Dataset:** `data/mixed/` (see §2.2)
-
-This is the model intended for **HuggingFace upload and grading** (Task 3), staying within 32M params.
-
-### 1.4 Task 4 Arena Model (optional, >32M allowed)
+### 1.4 Task 4 — Arena Model (optional, > 32M allowed)
 
 **Config:** `config/train_t4_arena.py`  
-**Model:** 12L/12H/768D (≈152M)  
-**Dataset:** `data/combined/` (ROCStories + TinyStories)
+**Output dir:** `out-t4-arena/`
 
-This model is **not** used for Tasks 1–3 submission due to the 32M limit.
+> **Warning:** do NOT upload this for Task 3 grading. For the arena competition only.
 
----
-
-## 2. Dataset Design
-
-### 2.1 ROCStories (Task 1 and ablations)
-
-`data/rocstories/prepare.py` produces plain ROCStories `train.bin` / `val.bin` with:
-
-- GPT-2 BPE tokenisation (`tiktoken`)
-- `<|endoftext|>` as a story separator token (id 50256)
-- fixed-seed split (seed=42)
-
-### 2.2 Mixed instruction + continuation dataset (Task 2/3 experiment)
-
-To study instruction capability without harming continuation perplexity, we train on a mixed corpus built from ROCStories:
-
-- **55%** plain continuation (dominant; matches evaluation mode)
-- **30%** instruction-prefixed examples (e.g., “Write a short story about: …”)
-- **15%** structured XML story tags (`<story><s1>…</s1>…</story>`)
-
-Implemented in `data/mixed/prepare.py`.
-
-**Important design choice:** the **validation split remains plain ROCStories only**, so perplexity is comparable with Task 1 and the ablation baselines.
+| Parameter | Value |
+|---|---|
+| `n_layer` | 12 |
+| `n_head` | 12 |
+| `n_embd` | 768 |
+| **Total params** | **≈ 152M** |
+| `dataset` | `combined` |
+| `max_iters` | 20,000 |
 
 ---
 
-## 3. Architectural Components (what each change does)
+## 2. The Forward Pass (All-Modern 30M Model)
 
-### 3.1 RoPE (Rotary Position Embedding)
+This describes the journey of one batch through the Task 3 model. The Task 1 baseline is the same but uses learned PE, LayerNorm, and GELU instead.
 
-Replaces learned absolute positional embeddings with a relative-position mechanism that often generalises better.
+### Step 1 — Input & Embedding
 
-### 3.2 RMSNorm + SwiGLU
+A batch of token indices `idx` of shape `(B, T)` enters `wte` (50,304 × 384), producing dense vectors. Because we use RoPE, **no positional embedding is added here**.
 
-Two LLaMA-style modernisations that change normalisation and FFN gating. In this codebase, SwiGLU uses the standard 8/3 hidden scaling so the parameter count remains comparable.
+### Step 2 — Transformer Blocks (×6)
 
-### 3.3 QK-Norm (Query-Key Normalisation) — Novelty in our Task 2 write-up
+Each block runs two sub-layers on the residual stream:
 
-Applies a per-head normalisation to Q and K before attention logits are computed. This targets attention-logit instability and is treated as the main novel architectural component explored in Task 2.
+**A. Attention sub-layer**
 
----
+1. **Pre-Norm (RMSNorm)** on the residual stream.
+2. **QKV projection** → Q, K, V tensors shaped `(B, T, n_head, head_dim)` where `head_dim = 64`.
+3. **QK-Norm** — each Q and K head is independently RMSNorm'd before the dot product. This prevents attention logit explosion and is the novel architectural contribution.
+4. **RoPE injection** — Q and K are rotated in complex-valued space to encode relative position (Su et al., 2022).
+5. **Flash Attention** — `softmax((Q·Kᵀ)/√head_dim)·V` with causal mask; O(T) memory.
+6. **Output projection** → back to 384-dim, added to residual (skip connection #1).
 
-## 4. Reproducible Execution Order
+**B. Feed-forward sub-layer (SwiGLU)**
 
-The simplest end-to-end path is the notebook `code_v2.ipynb`.
+1. **Pre-Norm (RMSNorm)** on the updated residual.
+2. Two parallel projections: `gate(x)` and `up(x)`, each `384 → 1,024` (`8/3 × 384` keeps param count equal to standard 4× MLP).
+3. `output = down(SiLU(gate(x)) * up(x))`, projection back to 384.
+4. Added to residual (skip connection #2).
 
-CLI-only (high level):
+### Step 3 — Output & Loss
 
-1. Task 1 baseline:
-   - `python data/rocstories/prepare.py`
-   - `python train.py config/train_t1_baseline.py`
-   - `python eval.py --init_from=resume --out_dir=out-t1-baseline --input_file=data/rocstories/eval_stories.txt`
-2. Task 2 ablations:
-   - run `config/train_t2_ablation_{a..e}.py`
-3. Task 3 best submission:
-   - `python data/mixed/prepare.py`
-   - `python train.py config/train_t3_best.py`
-4. Task 4 arena (optional):
-   - `python data/combined/prepare.py`
-   - `python train.py config/train_t4_arena.py`
-
----
-
-## References (for report citations)
-
-- Karpathy, A. nanoGPT. `https://github.com/karpathy/nanoGPT`
-- Mostafazadeh et al. (2016). ROCStories Corpus.
-- Su et al. (2022). RoPE / RoFormer. arXiv:2104.09864.
-- Zhang & Sennrich (2019). RMSNorm. arXiv:1910.07467.
-- Shazeer (2020). GLU variants / SwiGLU. arXiv:2002.05202.
-- Henry et al. (2020). Query-Key Normalization. arXiv:2010.04245.
-
-### 1.3 Novel Enhancements
-
-#### QK-Norm (Query-Key Normalization) — *Novelty for Task 2*
-
-QK-Norm applies RMSNorm to Q and K vectors *before* computing attention scores. This:
-- Prevents attention logit explosion during training (a known issue at moderate learning rates)
-- Enables higher stable learning rates (~1.5× compared to vanilla)
-- Adopted by Gemma 2, Cohere Command-R, and Chameleon (Meta, 2024)
-
-```python
-# In CausalSelfAttention.__init__:
-if config.use_qk_norm:
-    self.q_norm = RMSNorm(self.head_dim)
-    self.k_norm = RMSNorm(self.head_dim)
-
-# In forward:
-if self.use_qk_norm:
-    q = self.q_norm(q)
-    k = self.k_norm(k)
-```
-
-> This is a single, isolated enhancement with clear scientific motivation — ideal for the Task 2 ablation study to demonstrate "interesting insights from new architectures."
-
-#### Label Smoothing (Training Enhancement)
-
-Distributes 10% of probability mass uniformly across the vocabulary during cross-entropy loss:
-- Prevents overconfident predictions → better generalization on small datasets
-- Standard practice in modern LLM training (Szegedy et al., 2016)
-- 1-line change in `model.py` forward pass
-
-#### Repetition Penalty in Generation
-
-Divides logits of already-generated tokens by a penalty factor (default 1.2):
-- Crucial for story generation quality — prevents "looping" failure mode
-- Directly improves Qwen evaluation scores
-- Implemented in `model.generate()` alongside top-k and top-p
-
-#### Gradient Checkpointing (Memory Optimization)
-
-Trades compute for memory by recomputing activations during backward pass:
-- Enables larger batch sizes within 40GB A100 VRAM
-- ~30% memory reduction per layer at ~15% compute overhead
-- Critical for fitting 152M model + optimizer states + activations
+1. **Final RMSNorm** on the last residual.
+2. **LM head** (`384 → 50,304`), weight-tied to `wte`.
+3. **Label-smoothed cross-entropy** (smoothing = 0.1) during training.
+4. **Generation sampling** — repetition penalty (1.2) → temperature (0.75) → top-k (50) / top-p (0.9) → multinomial sample.
 
 ---
 
-## 2. Training Infrastructure
+## 3. Dataset Design
 
-### 2.1 Colab-Resilient Checkpointing
+### 3.1 Task 1 / Ablation Dataset (plain ROCStories)
 
-**Problem:** Colab disconnects without warning. The current `train.py` only saves at `eval_interval` steps, and a crash between saves loses ALL progress since last save.
+`data/rocstories/prepare.py` downloads `mintujupally/ROCStories` from HuggingFace and produces:
 
-**Solution — Multi-layer checkpoint system:**
+- **Tokeniser:** tiktoken GPT-2 BPE, vocab = 50,257 (stored as uint16)
+- **Separator:** `<|endoftext|>` (id 50256) between stories
+- **Split:** 90% train (≈ 3.7M tokens) / 10% val (≈ 410K tokens), seed = 42
+- **Format:** plain text — `[story]<|endoftext|>[story]<|endoftext|>…`
 
-```
-Layer 1: Time-based saves  — Every 15 minutes, regardless of step count
-Layer 2: Step-based saves  — At every eval_interval (250 steps)
-Layer 3: Emergency saves   — SIGTERM handler for Colab preemption
-Layer 4: Atomic writes     — Write to .tmp, then os.replace() → no corruption
-Layer 5: Scaler state      — Save GradScaler state for float16 resume
-```
+### 3.2 Mixed Instruction + Continuation Dataset (Task 3 experiment)
 
-#### Implementation Details:
+`data/mixed/prepare.py` creates a training corpus in three interleaved formats:
 
-```python
-# train.py additions:
-
-# 1. Time-based checkpoint trigger
-last_ckpt_time = time.time()
-CKPT_INTERVAL_SECS = 900  # 15 minutes
-
-# In training loop:
-if time.time() - last_ckpt_time > CKPT_INTERVAL_SECS:
-    save_checkpoint(...)
-    last_ckpt_time = time.time()
-
-# 2. SIGTERM emergency handler
-import signal
-def emergency_save(signum, frame):
-    save_checkpoint(tag="emergency")
-    sys.exit(0)
-signal.signal(signal.SIGTERM, emergency_save)
-
-# 3. Atomic checkpoint writes
-def save_checkpoint(path, data):
-    tmp_path = path + '.tmp'
-    torch.save(data, tmp_path)
-    os.replace(tmp_path, path)  # atomic on most filesystems
-
-# 4. Enhanced checkpoint dict
-checkpoint = {
-    'model': raw_model.state_dict(),
-    'optimizer': optimizer.state_dict(),
-    'scaler': scaler.state_dict(),     # NEW: save GradScaler
-    'model_args': model_args,
-    'iter_num': iter_num,
-    'best_val_loss': best_val_loss,
-    'config': config,
-    'train_time_total': total_time,     # NEW: cumulative training time
-}
-```
-
-### 2.2 JSONL Training Logs
-
-Write structured logs for plotting learning curves in the report:
-
-```python
-# train.py: append after each log_interval
-log_entry = {
-    "step": iter_num,
-    "train_loss": lossf,
-    "val_loss": val_loss if eval_step else None,
-    "lr": lr,
-    "mfu": running_mfu,
-    "dt_ms": dt * 1000,
-    "tokens_seen": iter_num * tokens_per_iter,
-}
-with open(os.path.join(out_dir, 'train_log.jsonl'), 'a') as f:
-    f.write(json.dumps(log_entry) + '\n')
-```
-
-### 2.3 Enhanced Training Configuration
-
-| Hyperparameter | Current | Enhanced | Rationale |
-|---|---|---|---|
-| `max_iters` | 10,000 | 20,000 | More training for larger model |
-| `eval_interval` | 250 | 500 | Reduce eval overhead for longer training |
-| `learning_rate` | 6e-4 | 3e-4 | Lower for larger model stability |
-| `warmup_iters` | 500 | 1,000 | Longer warmup for stable 152M training |
-| `lr_decay_iters` | 10,000 | 20,000 | Match max_iters |
-| `min_lr` | 6e-5 | 3e-5 | 0.1× max LR per Chinchilla |
-| `label_smoothing` | N/A | 0.1 | Regularization for small dataset |
-| `gradient_accumulation` | 4 | 4 | Keep effective batch at ~32K tokens |
-| `batch_size` | 32 | 16 | Halved to fit 152M model in memory |
-| `compile` | True | True | ~15% speedup with torch.compile |
-
-**Effective batch:** 4 × 16 × 256 = 16,384 tokens/step
-**ROCStories train:** ~2.25M tokens → ~137 steps/epoch → 20K steps ≈ 146 epochs
-
-### 2.4 Training Time Estimate (A100 40GB)
-
-```
-Model:     152M params, 12 layers, 768-dim
-Precision: bfloat16
-Batch:     16 seq × 256 tok = 4,096 tokens/microstep
-Grad acc:  4 → 16,384 tokens/step
-
-Estimated throughput: ~120,000-150,000 tokens/sec (A100)
-Time per step: ~0.11-0.14 seconds
-Total time for 20K steps: ~37-47 minutes
-
-→ Comfortably fits in 1 Colab session (~90 min limit)
-→ With checkpointing, 2 sessions maximum
-```
-
----
-
-## 3. Dataset Strategy
-
-### 3.1 Primary Dataset: ROCStories (Required)
-
-The assignment explicitly requires ROCStories. Current `prepare.py` handles this well:
-- ~98K 5-sentence stories
-- ~2.25M tokens after GPT-2 BPE tokenization
-- Split: 90% train / 10% val
-
-**This is sufficient for the assignment.** The assignment says *"Train your own nanoGPT model on the ROCStories training set"* — no additional datasets required for Task 1.
-
-### 3.2 Optional: TinyStories Supplementary Data (Task 2 Experiment)
-
-Adding TinyStories as a supplementary pretraining dataset could be a strong Task 2 experiment:
-- **Hypothesis:** Pre-training on a larger, related corpus (TinyStories: ~2.1M stories) before fine-tuning on ROCStories will improve generalization and reduce PPL
-- **Implementation:** Concatenate TinyStories + ROCStories into a combined `train.bin`
-- **Risk:** Low — it's additional narrative data, same domain
-- **Marks impact:** Demonstrates "cross-dataset" insight without just "switching a dataset"
-
-> **Recommendation:** Run this as an optional 5th ablation experiment IF you have compute time remaining. The 4-way architectural ablation is already strong for Task 2.
-
----
-
-## 4. Configuration Breakdown
-
-### 4.1 Main Config: `config/train_rocstories.py` (Task 1 + Task 3)
-
-```python
-# ~152M parameter LLaMA-style model with QK-Norm
-n_layer = 12, n_head = 12, n_embd = 768
-block_size = 256, dropout = 0.1, bias = False
-use_rmsnorm = True, use_rope = True, use_swiglu = True
-use_qk_norm = True  # NEW: QK-Norm
-label_smoothing = 0.1  # NEW
-max_iters = 20000, learning_rate = 3e-4
-```
-
-### 4.2 Ablation Configs (Task 2) — 5-Way Comparison
-
-| Config | Arch Flags | What it Tests |
+| Format | Share | Template |
 |---|---|---|
-| **A. Baseline** | All False | Vanilla nanoGPT reference |
-| **B. +RoPE** | RoPE only | Isolated positional encoding contribution |
-| **C. +RMSNorm+SwiGLU** | RMSNorm + SwiGLU | Isolated FFN/norm contribution |
-| **D. +QK-Norm** | QK-Norm only (NEW) | Novel: isolated attention stability contribution |
-| **E. All Modern** | All True | Full LLaMA-style + QK-Norm |
+| A — Plain continuation | 55% | `[raw story text]` |
+| B — Instruction-prefixed | 30% | `Write a short story about: [first 6 words].\n[story]` |
+| C — Structured XML | 15% | `<story><s1>…</s1>…<s5>…</s5></story>` |
 
-> **Scientific narrative for Task 2 report:**
-> We systematically isolate 3 orthogonal modernizations — (i) positional encoding (RoPE), (ii) FFN/normalization (RMSNorm+SwiGLU), and (iii) attention stability (QK-Norm) — to measure their individual and combined contributions to perplexity on short narrative text. QK-Norm has recently been adopted by Gemma 2 and Cohere Command-R but its impact on small models has not been studied.
+The **validation split is plain ROCStories only** (same as Task 1), so PPL numbers are directly comparable across all experiments.
+
+**Motivation:** InstructGPT (Ouyang et al., 2022) showed that mixed instruction/continuation training lets a model serve both prompt modes without hurting continuation fluency. We test this hypothesis at 30M scale.
+
+### 3.3 Combined Dataset (Task 4 arena)
+
+`data/combined/prepare.py` concatenates ROCStories train + TinyStories (Eldan & Li, 2023) into a single 110M-token training set, giving the 152M arena model broader narrative exposure.
+
+---
+
+## 4. Training Infrastructure
+
+### 4.1 Colab-Resilient Checkpointing
+
+`train.py` has three layers of protection against Colab preemption:
+
+```
+Layer 1: Step-based saves   — every eval_interval (250 steps)
+Layer 2: Time-based saves   — every 15 minutes regardless of step count
+Layer 3: SIGTERM handler    — saves immediately on Colab preemption signal
+```
+
+Checkpoints are written **atomically** (`torch.save` to `.tmp`, then `os.replace`) so a partial write never corrupts the checkpoint.
+
+The checkpoint dict includes `scaler.state_dict()` for full bf16/fp16 resume fidelity.
+
+### 4.2 JSONL Training Logs
+
+Every training run appends one JSON line per `log_interval` steps to `{out_dir}/train_log.jsonl`:
+
+```json
+{"step": 500, "train_loss": 2.70, "val_loss": 2.80, "lr": 5.8e-4, "mfu": 38.3, "dt_ms": 257}
+```
+
+These are read by the analysis cell in `code_v2.ipynb` to plot learning curves and build the ablation bar chart.
 
 ---
 
 ## 5. How Each Task is Satisfied
 
-### Task 1 (7 marks): Train nanoGPT on ROCStories
+### Task 1 (7 marks)
 
 | Requirement | Implementation |
 |---|---|
-| **(i) Data processing** | `prepare.py`: downloads from HuggingFace, formats as `title\nsentences`, tokenizes with tiktoken GPT-2 BPE, `<\|endoftext\|>` separator, writes `train.bin`/`val.bin` |
-| **(ii) Training** | `config/train_rocstories.py`: all hyperparameters documented. 152M model, 20K steps, cosine LR. Resume-safe with SIGTERM handler |
-| **(iii) Evaluation** | `eval.py`: computes PPL on held-out stories. `sample_batch.py`: generates qualitative samples from `eval_prompts.txt` |
-| **Report** | Learning curves from `train_log.jsonl`, PPL numbers, generated story samples, failure analysis |
+| **(i) Data processing** | `prepare.py`: HuggingFace download → tiktoken GPT-2 BPE → `<\|endoftext\|>` separator → uint16 binary |
+| **(ii) Training** | `config/train_t1_baseline.py`: official 6/6/384 config, all hyperparameters documented, Colab-resilient |
+| **(iii) Evaluation** | `eval.py` for PPL, `sample_batch.py` for qualitative samples; learning curves from JSONL logs |
 
-### Task 2 (8 marks): Exploration
+### Task 2 (8 marks)
 
-| Criterion | How We Score |
+| Criterion | Strategy |
 |---|---|
-| **Novelty (3 marks)** | QK-Norm is a recent technique (Gemma 2, 2024) not commonly explored in small models. Ablation isolates 3 orthogonal components systematically. This goes well beyond "switching architecture" |
-| **Comprehensive trials (3 marks)** | 5-way ablation with hypotheses, PPL comparison, generated sample comparison, and analysis of WHY each component helps |
-| **Writing clarity (2 marks)** | Structured report with tables, learning curves, and clear narrative |
+| **Novelty (3 marks)** | QK-Norm at sub-32M scale is unstudied. Instruction-mixed training at this scale is also novel. Goes well beyond "switching architecture". |
+| **Comprehensive trials (3 marks)** | 5-way architecture ablation (A–E) + instruction-mixing experiment. Each has hypothesis, PPL result, and qualitative comparison. |
+| **Writing clarity (2 marks)** | Tables, learning-curve overlay, bar chart, lexical-diversity metrics, all generated by the analysis cell. |
 
-### Task 3 (15 marks): Best Checkpoint Submission
+### Task 3 (15 marks)
 
 | Component | Strategy |
 |---|---|
-| **Low PPL** | 152M model (2.4× capacity) + longer training (20K steps) + label smoothing + QK-Norm stability → should achieve PPL well below 20 threshold |
-| **High Qwen scores** | Repetition penalty in generation prevents looping; `sample_params.json` tuned: `{temperature: 0.75, top_k: 50, top_p: 0.9, repetition_penalty: 1.2}` |
-| **Submission** | HuggingFace repo: `ckpt.pt` + `model.py` + `sample_params.json` |
+| **PPL** | All-modern 30M + mixed instruction data + 15K steps with cosine decay |
+| **Qwen quality** | Repetition penalty (1.2) prevents loops; temperature 0.75, top-p 0.9 for coherent sampling |
+| **Submission** | `ckpt.pt` + `model.py` + `sample_params.json` uploaded by §3.2 of `code_v2.ipynb` |
 
-### Task 4 (2 bonus marks): Arena Competition
+### Task 4 (2 bonus marks)
 
 | Strategy | Details |
 |---|---|
-| **Model quality** | 152M modern model should produce more coherent stories than most 25M submissions |
-| **Generation params** | Slightly higher temperature (0.85) for creativity in human-judged arena |
+| **Model** | 152M all-modern on combined ROCStories+TinyStories |
+| **Sampling** | Temperature 0.85, top-k 50, top-p 0.9, rep-penalty 1.3 (more creative for human judging) |
 
 ---
 
-## 6. Sequential Flow of the Model
+## 6. Execution Order
 
-This section describes the step-by-step journey of data through the enhanced ~152M parameter nanoGPT model during a forward pass.
+Use `code_v2.ipynb` (recommended). CLI equivalent:
 
-### Step 1: Input Processing & Embedding
-1. **Input:** The model receives a batch of token indices `idx` of shape `(Batch_Size, Sequence_Length)`.
-2. **Token Embedding:** `idx` is passed through the `wte` (Word Token Embedding) layer, converting discrete tokens into dense 768-dimensional vectors.
-3. **Dropout:** A slight dropout (0.1 or 0.05) is applied to the embeddings to prevent overfitting on the small dataset.
-*(Note: Because we use RoPE, absolute positional embeddings are **not** added at this stage).*
+```bash
+# Task 1
+python data/rocstories/prepare.py
+python train.py config/train_t1_baseline.py
+python eval.py --init_from=resume --out_dir=out-t1-baseline \
+    --input_file=data/rocstories/eval_stories.txt
 
-### Step 2: Transformer Blocks (12 Layers)
-The embedded sequence passes sequentially through 12 identical transformer blocks. Inside each block:
+# Task 2 — ablations
+for cfg in a b c d e; do
+    python train.py config/train_t2_ablation_${cfg}.py
+done
 
-**A. Attention Phase (The "Context" step):**
-1. **Pre-Norm:** The input is normalized using **RMSNorm** (`ln_1`).
-2. **QKV Projection:** The normalized input is projected into Query (Q), Key (K), and Value (V) tensors using a linear layer.
-3. **QK-Norm (Novelty):** Q and K correspond to per-head dimensions (64). Before attention is computed, they are each normalized independently using an RMSNorm layer (`q_norm` and `k_norm`). *This prevents the attention logits from growing too large and destabilizing training.*
-4. **RoPE Injection:** Rotary Positional Embeddings (RoPE) are applied to the normalized Q and K vectors. This rotates the vectors in hyperspace based on their relative positions in the sequence.
-5. **Flash Attention:** The scaled dot-product attention is computed: `softmax((Q @ K.T) / sqrt(d)) @ V`. A causal mask ensures tokens only attend to previous tokens. Dropout is applied to the attention weights.
-6. **Output Projection:** The attention output is linearly projected back to the residual stream dimension (768), and added back to the original block input (Residual Connection #1).
+# Task 2 — instruction experiment / Task 3 model
+python data/mixed/prepare.py
+python train.py config/train_t3_best.py
 
-**B. Feed-Forward Phase (The "Thinking" step):**
-1. **Pre-Norm:** The output of the attention phase is normalized using **RMSNorm** (`ln_2`).
-2. **SwiGLU FFN:** The normalized data enters the SwiGLU block. It is projected into a much higher dimension (3072) across two parallel branches (`gate` and `up`). The `gate` branch applies the SiLU activation function, which is element-wise multiplied by the `up` branch.
-3. **Down Projection:** The multiplied result is projected back down to the residual stream dimension (768), capturing complex non-linear relationships.
-4. **Residual Addition:** The FFN output is added back to the residual stream (Residual Connection #2).
+# Task 3 — upload
+python hf_load.py upload --local-dir submission_hf \
+    --repo-id YOUR_USERNAME/nanoGPT_hw --token YOUR_TOKEN
 
-### Step 3: Output & Loss Computation
-1. **Final Normalization:** After all 12 blocks, the final representation is normalized using a final **RMSNorm** (`ln_f`).
-2. **LM Head:** The normalized vectors are passed through the language modeling head (`lm_head`), which projects the 768-dimensional vectors back into the 50304-dimensional vocabulary space, yielding logits. *(Note: The weights of this projection are intimately tied to the `wte` embedding layer to save parameters).*
-3. **Label Smoothing Loss:** During training, instead of computing standard Cross-Entropy loss against a "hard" one-hot target, we use **Label Smoothing (0.1)**. 90% of the target probability remains on the correct next word, while 10% is distributed uniformly across the rest of the vocabulary. This stops the model from becoming overly confident and overfitting the small training set.
-4. **Generation (Inference):** During text generation, logits are subjected to a **Repetition Penalty** (dividing logits of already-generated words to discourage loops), divided by the **Temperature** (0.75), filtered by **Top-K** (50) and **Top-P** (0.9), and finally sampled to pick the next word.
-
----
-
-## 7. Training & Improvement Narrative 
-
-To achieve the best possible performance for story generation, the model development followed a systematic journey of architectural optimization, data augmentation, and resilient training. This narrative provides the context for how the model reached its current capability.
-
-### Phase 1: The Vanilla Baseline
-We began with the baseline nanoGPT: a standard GPT-2 style architecture (learned positional embeddings, LayerNorm, GELU FFN) scaled to ~152M parameters (12 Layers, 12 Heads, 768-dim) to fit comfortably on an A100 GPU. Training this model immediately exposed the limits of the small ~2.25M token ROCStories dataset—the model quickly overfit.
-
-### Phase 2: Architectural Ablations (Task 2)
-To build a better model, we systematically ripped out old components and replaced them with modern LLaMA-style equivalents, establishing rigorous ablation baselines:
-1. **+RoPE:** Replaced absolute positional embeddings with Rotary Positional Embeddings, allowing the model to generalize better to varying sequence lengths and relative word distances.
-2. **+RMSNorm & +SwiGLU:** Replaced LayerNorm with the computationally cheaper RMSNorm, and the GELU FFN with the highly expressive SwiGLU block.
-3. **+QK-Norm (The Novel Contribution):** We integrated Query-Key Normalization (recently popularized by Gemma 2 and Cohere Command-R in 2024). Small models often suffer from attention logit explosion at higher learning rates. Normalizing Q and K *before* the dot product stabilized our training curve entirely.
-
-### Phase 3: The Data Breakthrough (Pre-training vs. Fine-tuning)
-Architectural changes alone cannot overcome a fundamental lack of data. ROCStories is a *fine-tuning* dataset (highly specific 5-sentence formats), not a pre-training dataset. 
-To give the model a foundational understanding of the English language and narrative structure, we introduced **TinyStories** (~2.1M simple stories, ~60M tokens). 
-*   **The Combined Strategy:** Instead of a strict two-stage pipeline (pre-train then fine-tune), we combined TinyStories and ROCStories into a single training run. The enormous volume of TinyStories acts as a massive regularization force, teaching the model grammar, characters, and basic logic, while the presence of ROCStories ensures it learns the specific 5-sentence format evaluated by the assignments.
-
-### Phase 4: Regularization and Generation Tuning
-Even with more data, text generation requires careful tuning to avoid robotic or looping outputs:
-*   **Label Smoothing:** We added a 0.1 smoothing factor to the loss function, forcing the model to remain slightly "uncertain" and preventing overconfidence on common words.
-*   **Repetition Penalty & Sampling:** We modified the generation script to penalize tokens the model has already output. Combined with a slightly lower temperature (0.75) and nucleus sampling (Top-P 0.9), the model generates highly coherent, creative stories without getting trapped in repetitive loops.
-*   **Colab Resilience:** To survive 20,000 training steps on Google Colab, we completely overhauled the training script to include atomic file rewrites, time-based checkpointing (every 15 min), and a SIGTERM emergency hook, ensuring not a single training step was lost to platform instability.
-
----
-
-## 8. Files Modified / Created
-
-### Modified Files
-
-| File | Changes |
-|---|---|
-| [model.py](file:///c:/Personal/My_DEGREE's/Master_of_Computing_(Advanced)/Australian_National_University/3rd%20Sem/Advanced%20ML/Assgn%201/nanoGPT_code/nanoGPT/model.py) | Add `use_qk_norm` flag, QK-Norm in attention, optimize SwiGLU hidden dim, add label smoothing, repetition penalty in generate(), gradient checkpointing |
-| [train.py](file:///c:/Personal/My_DEGREE's/Master_of_Computing_(Advanced)/Australian_National_University/3rd%20Sem/Advanced%20ML/Assgn%201/nanoGPT_code/nanoGPT/train.py) | Time-based checkpoints, SIGTERM handler, atomic saves, scaler state, JSONL logs, label smoothing param |
-| [config/train_rocstories.py](file:///c:/Personal/My_DEGREE's/Master_of_Computing_(Advanced)/Australian_National_University/3rd%20Sem/Advanced%20ML/Assgn%201/nanoGPT_code/nanoGPT/config/train_rocstories.py) | Scale to 152M model, 20K steps, lower LR, label smoothing |
-| [config/train_rocstories_baseline.py](file:///c:/Personal/My_DEGREE's/Master_of_Computing_(Advanced)/Australian_National_University/3rd%20Sem/Advanced%20ML/Assgn%201/nanoGPT_code/nanoGPT/config/train_rocstories_baseline.py) | Match new training length (20K steps, lower LR) |
-| [config/train_rocstories_rope_only.py](file:///c:/Personal/My_DEGREE's/Master_of_Computing_(Advanced)/Australian_National_University/3rd%20Sem/Advanced%20ML/Assgn%201/nanoGPT_code/nanoGPT/config/train_rocstories_rope_only.py) | Match new training length |
-| [config/train_rocstories_rmsnorm_swiglu.py](file:///c:/Personal/My_DEGREE's/Master_of_Computing_(Advanced)/Australian_National_University/3rd%20Sem/Advanced%20ML/Assgn%201/nanoGPT_code/nanoGPT/config/train_rocstories_rmsnorm_swiglu.py) | Match new training length |
-| [colab_setup.py](file:///c:/Personal/My_DEGREE's/Master_of_Computing_(Advanced)/Australian_National_University/3rd%20Sem/Advanced%20ML/Assgn%201/nanoGPT_code/nanoGPT/colab_setup.py) | Update for 152M model, new VRAM estimates, add SIGTERM cell |
-| [sample_params.json](file:///c:/Personal/My_DEGREE's/Master_of_Computing_(Advanced)/Australian_National_University/3rd%20Sem/Advanced%20ML/Assgn%201/nanoGPT_code/nanoGPT/sample_params.json) | Add repetition_penalty, tune temperature/top_p |
-| [README.md](file:///c:/Personal/My_DEGREE's/Master_of_Computing_(Advanced)/Australian_National_University/3rd%20Sem/Advanced%20ML/Assgn%201/nanoGPT_code/nanoGPT/README.md) | Update for new model size and commands |
-
-### New Files
-
-| File | Purpose |
-|---|---|
-| `config/train_rocstories_qknorm.py` | Task 2 ablation D: QK-Norm only |
-
----
-
-## 9. Execution Order
-
-```
-1. model.py          — Architecture changes (QK-Norm, SwiGLU, label smoothing, etc.)
-2. train.py          — Colab-resilient checkpointing + JSONL logs
-3. config/*.py       — Update all configs for 152M model
-4. colab_setup.py    — Update Colab cells
-5. sample_params.json — Tune generation params
-6. README.md         — Update documentation
-7. Verification      — Run parameter count check, test resume logic
+# Task 4 (optional arena)
+python data/combined/prepare.py
+python train.py config/train_t4_arena.py
 ```
 
 ---
 
-## 10. Risk Assessment
+## 7. References
 
-| Risk | Probability | Mitigation |
-|---|---|---|
-| 152M model OOM on A100 | Low | batch_size=16, gradient checkpointing available |
-| Colab disconnect | High | 3-layer checkpointing (time + step + SIGTERM) |
-| Worse PPL than 25M (overfit) | Low | Label smoothing + dropout + weight decay |
-| Evaluator can't load model | Medium | Filter model_args to GPTConfig fields (already done in eval.py) |
-| Training doesn't converge in 20K steps | Low | ROCStories is small; 20K steps = 146 epochs |
-
+- Karpathy, A. (2022). nanoGPT. https://github.com/karpathy/nanoGPT
+- Mostafazadeh et al. (2016). ROCStories Corpus. *NAACL*.
+- Kaplan et al. (2020). Scaling Laws for Neural Language Models. arXiv:2001.08361.
+- Su et al. (2022). RoFormer: Enhanced Transformer with Rotary Position Embedding. arXiv:2104.09864.
+- Zhang & Sennrich (2019). Root Mean Square Layer Normalization. arXiv:1910.07467.
+- Shazeer (2020). GLU Variants Improve Transformer. arXiv:2002.05202.
+- Henry et al. (2020). Query-Key Normalization for Transformers. arXiv:2010.04245.
+- Google (2024). Gemma 2: Improving Open Language Models at a Practical Size. arXiv:2408.00118.
+- Ouyang et al. (2022). Training Language Models to Follow Instructions. arXiv:2203.02155.
+- Eldan & Li (2023). TinyStories. arXiv:2305.07759.
