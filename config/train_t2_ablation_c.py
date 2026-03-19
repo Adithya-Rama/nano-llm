@@ -54,7 +54,7 @@ use_qk_norm = False
 label_smoothing = 0.1
 
 learning_rate = 6e-4
-max_iters     = 10000
+max_iters     = 5000    # best val at step ~1750 — stop before overfitting
 weight_decay  = 0.1
 beta1 = 0.9
 beta2 = 0.95
@@ -62,7 +62,7 @@ grad_clip = 1.0
 
 decay_lr       = True
 warmup_iters   = 100
-lr_decay_iters = 10000
+lr_decay_iters = 5000   # must match max_iters
 min_lr         = 6e-5
 
 ckpt_interval_secs = 900

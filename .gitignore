@@ -12,3 +12,5 @@ env/
 venv/
 /output/
 notes
+.cursor/
+.claude/

@@ -59,7 +59,7 @@ block_size  = 256
 n_layer  = 6
 n_head   = 6
 n_embd   = 384
-dropout  = 0.05    # lower dropout: mixed data provides implicit regularisation
+dropout  = 0.15    # higher dropout to resist memorization on mixed corpus
 bias     = False
 
 use_rmsnorm = True
@@ -71,7 +71,7 @@ label_smoothing = 0.1
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 6e-4
-max_iters     = 15000
+max_iters     = 8000    # 8K × 32768 tok/step = 262M token-steps ≈ 11 passes on 23M mixed corpus
 weight_decay  = 0.1
 beta1 = 0.9
 beta2 = 0.95
@@ -79,8 +79,8 @@ grad_clip = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 150    # ~1% of 15K run
-lr_decay_iters = 15000
+warmup_iters   = 150    # ~2% of 8K run
+lr_decay_iters = 8000   # must match max_iters
 min_lr         = 6e-5
 
 # ── Colab resilience ─────────────────────────────────────────────────────────

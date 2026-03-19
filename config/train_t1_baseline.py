@@ -61,7 +61,7 @@ label_smoothing = 0.1
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 6e-4    # standard peak LR for ~30M GPT (Kaplan et al., 2020)
-max_iters     = 10000
+max_iters     = 5000    # best val at step 2250 — no need to train past 5K
 weight_decay  = 0.1
 beta1 = 0.9
 beta2 = 0.95
@@ -69,8 +69,8 @@ grad_clip = 1.0
 
 # ── LR schedule — cosine decay ───────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 100    # ~1% of run — standard for short training
-lr_decay_iters = 10000  # decay to min_lr by the end of training
+warmup_iters   = 100    # ~2% of 5K run
+lr_decay_iters = 5000   # must match max_iters
 min_lr         = 6e-5   # 0.1 × peak_lr (Chinchilla scaling)
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
