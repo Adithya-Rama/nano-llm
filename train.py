@@ -408,8 +408,6 @@ while True:
         # Log validation loss
         log_training_step(iter_num, float(losses['train']),
                          val_loss=losses['val'], lr_val=lr, mfu_val=running_mfu)
-        # Print best PPL seen so far during training
-        print(f"  [best so far] val_loss={best_val_loss:.4f}  PPL={math.exp(best_val_loss):.1f}")
         if losses['val'] < best_val_loss:
             best_val_loss = losses['val']
             if iter_num > 0:
@@ -421,6 +419,12 @@ while True:
             if iter_num > 0:
                 save_checkpoint()             # → ckpt.pt only, ckpt_best.pt untouched
                 last_ckpt_time = time.time()
+        # Print best PPL (guard against overflow when best_val_loss is still 1e9 sentinel)
+        try:
+            ppl_str = f"{math.exp(best_val_loss):.1f}"
+        except OverflowError:
+            ppl_str = "—"
+        print(f"  [best so far] val_loss={best_val_loss:.4f}  PPL={ppl_str}")
     if iter_num == 0 and eval_only:
         break
 
