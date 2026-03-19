@@ -61,7 +61,7 @@ beta2 = 0.95
 grad_clip = 1.0
 
 decay_lr       = True
-warmup_iters   = 200
+warmup_iters   = 100
 lr_decay_iters = 10000
 min_lr         = 6e-5
 

@@ -31,9 +31,9 @@
 
 # ── I/O ──────────────────────────────────────────────────────────────────────
 out_dir               = 'out-t3-best'
-eval_interval         = 500
+eval_interval         = 250
 log_interval          = 10
-eval_iters            = 200
+eval_iters            = 100
 eval_only             = False
 always_save_checkpoint = True
 init_from             = 'scratch'
@@ -79,7 +79,7 @@ grad_clip = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 500
+warmup_iters   = 150    # ~1% of 15K run
 lr_decay_iters = 15000
 min_lr         = 6e-5
 

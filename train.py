@@ -44,7 +44,7 @@ from model import GPTConfig, GPT
 # I/O
 out_dir = 'out'
 eval_interval = 2000
-log_interval = 1
+log_interval = 10  # was 1 — every-step logging creates huge JSONL files with no benefit
 eval_iters = 200
 eval_only = False # if True, script exits right after the first eval
 always_save_checkpoint = True # if True, always save a checkpoint after each eval
@@ -81,8 +81,8 @@ beta2 = 0.95
 grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True # whether to decay the learning rate
-warmup_iters = 2000 # how many steps to warm up for
-lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
+warmup_iters = 100   # was 2000 (20% of a 10K run) — standard practice is ~1%
+lr_decay_iters = 600000  # sentinel — auto-corrected below after config load
 min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # Colab resilience
 ckpt_interval_secs = 900  # time-based checkpoint interval (seconds), 0 = disabled
@@ -95,6 +95,19 @@ compile = True # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
+
+# ── CRITICAL: auto-match lr_decay_iters to max_iters ─────────────────────────
+# If a config sets max_iters (e.g. 10000) but does NOT set lr_decay_iters,
+# the default 600000 sentinel remains → the cosine LR schedule NEVER fires →
+# the model trains at a flat learning rate the entire run.
+# This auto-fix corrects that silently. Configs that explicitly set
+# lr_decay_iters to a non-600000 value keep their explicit setting.
+if lr_decay_iters == 600000 and max_iters != 600000:
+    lr_decay_iters = max_iters
+    print(f"[train] ✓ Auto-matched lr_decay_iters={lr_decay_iters} to max_iters "
+          f"(was 600000 default — cosine decay would not have fired)")
+# ─────────────────────────────────────────────────────────────────────────────
+
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 # -----------------------------------------------------------------------------
 
@@ -346,6 +359,7 @@ def log_training_step(step, loss_val, val_loss=None, lr_val=None, mfu_val=None, 
     }
     if val_loss is not None:
         entry["val_loss"] = round(float(val_loss), 6)
+        entry["val_ppl"]  = round(math.exp(float(val_loss)), 4)
     if lr_val is not None:
         entry["lr"] = round(lr_val, 8)
     if mfu_val is not None:
@@ -381,7 +395,8 @@ while True:
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        val_ppl = math.exp(losses['val'])
+        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, val ppl {val_ppl:.2f}")
         if wandb_log:
             wandb.log({
                 "iter": iter_num,

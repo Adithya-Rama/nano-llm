@@ -151,9 +151,12 @@ class CausalSelfAttention(nn.Module):
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
 
-        # RoPE module (only created when use_rope=True; stored in state_dict)
+        # RoPE module (only created when use_rope=True; stored in state_dict).
+        # Cache at least 2048 positions so inference with longer prompts or
+        # Task 4's block_size=512 never raises an index error.
         if config.use_rope:
-            self.rope = RotaryEmbedding(self.head_dim, max_seq_len=config.block_size)
+            rope_max_len = max(config.block_size, 2048)
+            self.rope = RotaryEmbedding(self.head_dim, max_seq_len=rope_max_len)
 
         # QK-Norm: per-head RMSNorm on Q and K (Gemma 2 / Cohere style)
         if config.use_qk_norm:
@@ -233,17 +236,22 @@ class MLP(nn.Module):
 class SwiGLUMLP(nn.Module):
     """SwiGLU feed-forward: FFN(x) = (SiLU(gate(x)) ⊙ up(x)) × down.
 
-    Parameter-count note: uses 4×d_model for hidden dim (same as MLP),
-    so SwiGLUMLP is slightly larger (+50%) than MLP at same hidden size.
-    To match MLP params exactly, set hidden = int(8/3 * n_embd).
-    We deliberately use 4×n_embd for simplicity; the extra capacity helps.
+    Parameter-count: uses 8/3 × n_embd for hidden dim, which gives the same
+    total parameter count as the standard 4× GELU MLP:
+        MLP:    2 × (n_embd × 4·n_embd)     = 8 × n_embd²
+        SwiGLU: 3 × (n_embd × 8/3·n_embd)   = 8 × n_embd²
+    For n_embd=384: hidden=1024. For n_embd=768: hidden=2048.
+    This keeps ALL configs ≤ 32M parameters (4× would push C and E to ~33.6M).
 
     State-dict keys: gate_proj, up_proj, down_proj  (different from MLP's c_fc/c_proj)
     """
 
     def __init__(self, config):
         super().__init__()
-        hidden = 4 * config.n_embd
+        # 8/3 × n_embd gives identical param count to standard 4× GELU MLP.
+        # Round up to nearest multiple of 64 for CUDA efficiency.
+        hidden = int(8 / 3 * config.n_embd)
+        hidden = (hidden + 63) // 64 * 64
         self.gate_proj = nn.Linear(config.n_embd, hidden, bias=False)
         self.up_proj   = nn.Linear(config.n_embd, hidden, bias=False)
         self.down_proj = nn.Linear(hidden, config.n_embd, bias=False)
@@ -538,9 +546,12 @@ class GPT(nn.Module):
             # Top-p (nucleus) filtering
             if top_p < 1.0:
                 sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-                cumulative_probs = sorted_logits.softmax(dim=-1).cumsum(dim=-1)
-                # Remove tokens with cumulative probability above top_p
-                sorted_remove = cumulative_probs - sorted_logits.softmax(dim=-1) > top_p
+                probs_sorted = sorted_logits.softmax(dim=-1)
+                cumulative_probs = probs_sorted.cumsum(dim=-1)
+                # >= matches standard HuggingFace nucleus sampling:
+                # the boundary token whose cumulative prob first meets/exceeds
+                # top_p is excluded (keeps the nucleus strictly within top_p mass)
+                sorted_remove = (cumulative_probs - probs_sorted) >= top_p
                 sorted_logits[sorted_remove] = float('-Inf')
                 logits.scatter_(1, sorted_indices, sorted_logits)
 

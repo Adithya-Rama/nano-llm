@@ -69,7 +69,7 @@ grad_clip = 1.0
 
 # ── LR schedule — cosine decay ───────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 200    # short warmup; dataset is small
+warmup_iters   = 100    # ~1% of run — standard for short training
 lr_decay_iters = 10000  # decay to min_lr by the end of training
 min_lr         = 6e-5   # 0.1 × peak_lr (Chinchilla scaling)
 

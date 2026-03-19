@@ -28,7 +28,7 @@
 # ── I/O ──────────────────────────────────────────────────────────────────────
 out_dir               = 'out-t4-arena'
 eval_interval         = 500
-log_interval          = 10
+log_interval          = 20   # heavier model — log every 20 steps to keep JSONL manageable
 eval_iters            = 100
 eval_only             = False
 always_save_checkpoint = True
@@ -44,17 +44,18 @@ dataset = 'combined'   # data/combined/train.bin + val.bin
 
 # ── Data loading ─────────────────────────────────────────────────────────────
 # Combined ≈ 110M tokens
-# Effective batch = 16 × 8 × 256 = 32,768 tokens/step
-# 20,000 steps × 32,768 = 655M token-steps ≈ 6 passes
+# Effective batch = 32 × 8 × 512 = 131,072 tokens/step
+# 20,000 steps × 131,072 = 2.6B token-steps ≈ 26 passes (combined corpus)
+# block_size=512: WritingPrompts stories avg 600 tokens — must be at least 512
 gradient_accumulation_steps = 8
-batch_size  = 16
-block_size  = 256
+batch_size  = 32
+block_size  = 512
 
 # ── Model — 152M (NO size constraint for arena) ──────────────────────────────
 n_layer  = 12
 n_head   = 12
 n_embd   = 768
-dropout  = 0.05
+dropout  = 0.0     # no dropout for large-scale pretraining
 bias     = False
 
 use_rmsnorm = True
@@ -62,7 +63,7 @@ use_rope    = True
 use_swiglu  = True
 use_qk_norm = True
 
-label_smoothing = 0.1
+label_smoothing = 0.0    # skip label smoothing for pretraining
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 3e-4    # lower LR for stability with 152M model
@@ -74,12 +75,17 @@ grad_clip = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 1000
+warmup_iters   = 200     # ~1% of 20K run
 lr_decay_iters = 20000
 min_lr         = 3e-5
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
 ckpt_interval_secs = 900
+
+# ── Memory management ────────────────────────────────────────────────────────
+# 152M model in bfloat16 + batch=32 + block=512 ≈ 22–24 GB VRAM.
+# Set to True on a 16 GB GPU (e.g., T4) — trades ~20% speed for ~30% less VRAM.
+use_gradient_checkpointing = False   # set True if OOM
 
 # ── System ───────────────────────────────────────────────────────────────────
 device  = 'cuda'
