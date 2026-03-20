@@ -10,7 +10,7 @@
 #   55% plain continuation (what PPL evaluation uses)
 #   30% instruction-prefixed stories
 #   15% structured XML stories
-#   Optional: +20M TinyStories tokens for richer language
+#   Optional: up to ~100M TinyStories tokens (cap in data/mixed/prepare.py)
 #
 # The instruction mixture teaches the model to handle both
 # natural prompts and raw continuation, without hurting PPL
@@ -47,9 +47,9 @@ wandb_run_name = 'task3-best-30M-mixed'
 dataset = 'mixed'    # data/mixed/train.bin + val.bin
 
 # ── Data loading ─────────────────────────────────────────────────────────────
-# Mixed dataset ≈ 3.7M × (1/0.55) ≈ 6.7M tokens
+# Mixed ROCStories formats + optional TinyStories prefix (~100M cap) → ~104M+ train tokens
 # Effective batch = 32 × 4 × 256 = 32,768 tokens/step
-# 15,000 steps × 32,768 = 491M token-steps ≈ 73 passes
+# 15,000 steps × 32,768 = 491M token-steps
 gradient_accumulation_steps = 4
 batch_size  = 32
 block_size  = 256
@@ -71,7 +71,7 @@ label_smoothing = 0.1
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 6e-4
-max_iters     = 8000    # 8K × 32768 tok/step = 262M token-steps ≈ 11 passes on 23M mixed corpus
+max_iters     = 15000   # longer run for larger mixed+TinyStories corpus (~104M tokens)
 weight_decay  = 0.1
 beta1 = 0.9
 beta2 = 0.95
@@ -79,8 +79,8 @@ grad_clip = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 150    # ~2% of 8K run
-lr_decay_iters = 8000   # must match max_iters
+warmup_iters   = 150    # ~1% of 15K run
+lr_decay_iters = 15000  # must match max_iters
 min_lr         = 6e-5
 
 # ── Colab resilience ─────────────────────────────────────────────────────────

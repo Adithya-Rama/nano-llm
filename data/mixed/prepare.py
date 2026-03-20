@@ -129,7 +129,7 @@ def build_mixed_dataset(with_tinystories: bool = False):
         if os.path.exists(tiny_path):
             print("[mixed] Loading TinyStories tokens…")
             tiny_arr = np.fromfile(tiny_path, dtype=np.uint16)
-            cap = min(len(tiny_arr), 20_000_000)
+            cap = min(len(tiny_arr), 100_000_000)  # use up to ~100M TinyStories tokens (~half full corpus)
             tiny_train_tokens = tiny_arr[:cap].tolist()
             print(f"[mixed] TinyStories: {len(tiny_train_tokens)/1e6:.1f}M tokens capped")
         else:
