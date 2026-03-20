@@ -66,6 +66,7 @@ use_qk_norm = True
 label_smoothing = 0.0    # skip label smoothing for pretraining
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
+# NOTE: Not using train_shakespeare_char recipe (1e-3 / dropout 0.2) — 152M + large corpus = pretraining scale
 learning_rate = 3e-4    # lower LR for stability with 152M model
 max_iters     = 20000
 weight_decay  = 0.1

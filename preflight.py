@@ -248,13 +248,13 @@ print("\n── 5. Training configs ──────────────�
 
 # (max_iters, lr_decay_iters, warmup range, must-have n_embd=384)
 CONFIGS = {
-    "config/train_t1_baseline.py":   (10000, 10000, (50, 200),  True),
-    "config/train_t2_ablation_a.py": (10000, 10000, (50, 200),  True),
-    "config/train_t2_ablation_b.py": (10000, 10000, (50, 200),  True),
-    "config/train_t2_ablation_c.py": (10000, 10000, (50, 200),  True),
-    "config/train_t2_ablation_d.py": (10000, 10000, (50, 200),  True),
-    "config/train_t2_ablation_e.py": (10000, 10000, (50, 200),  True),
-    "config/train_t3_best.py":       (15000, 15000, (50, 300),  True),
+    "config/train_t1_baseline.py":   (5000, 5000, (50, 200),  True),
+    "config/train_t2_ablation_a.py": (5000, 5000, (50, 200),  True),
+    "config/train_t2_ablation_b.py": (5000, 5000, (50, 200),  True),
+    "config/train_t2_ablation_c.py": (5000, 5000, (50, 200),  True),
+    "config/train_t2_ablation_d.py": (5000, 5000, (50, 200),  True),
+    "config/train_t2_ablation_e.py": (5000, 5000, (50, 200),  True),
+    "config/train_t3_best.py":       (20000, 20000, (100, 400),  True),
     "config/train_t4_arena.py":      (20000, 20000, (50, 400),  False),  # larger model, no 32M limit
 }
 

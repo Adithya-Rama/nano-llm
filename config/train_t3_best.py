@@ -35,7 +35,7 @@ eval_interval         = 250
 log_interval          = 10
 eval_iters            = 100
 eval_only             = False
-always_save_checkpoint = True
+always_save_checkpoint = False
 init_from             = 'scratch'
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -59,7 +59,7 @@ block_size  = 256
 n_layer  = 6
 n_head   = 6
 n_embd   = 384
-dropout  = 0.15    # higher dropout to resist memorization on mixed corpus
+dropout  = 0.2     # baby-GPT / train_shakespeare_char recipe (same as T1/T2)
 bias     = False
 
 use_rmsnorm = True
@@ -70,19 +70,19 @@ use_qk_norm = True
 label_smoothing = 0.1
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
-learning_rate = 6e-4
+learning_rate = 1e-3
 # max_iters     = 15000   # longer run for larger mixed+TinyStories corpus (instruction + xml) (~104M tokens)
 max_iters     = 20000   # longer run for larger mixed+TinyStories corpus (text only) (~104M tokens)
 weight_decay  = 0.1
 beta1 = 0.9
-beta2 = 0.95
+beta2 = 0.99
 grad_clip = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 150    # ~1% of 15K run
-lr_decay_iters = 15000  # must match max_iters
-min_lr         = 6e-5
+warmup_iters   = 200    # ~1% of 20K run
+lr_decay_iters = 20000  # must match max_iters
+min_lr         = 1e-4
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
 ckpt_interval_secs = 900

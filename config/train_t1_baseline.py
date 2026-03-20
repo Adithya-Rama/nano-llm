@@ -23,7 +23,7 @@ eval_interval         = 250
 log_interval          = 10
 eval_iters            = 100
 eval_only             = False
-always_save_checkpoint = True
+always_save_checkpoint = False  # nanoGPT char: only save when val improves (overfit expected)
 init_from             = 'scratch'
 
 # ── Logging ──────────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ block_size  = 256
 n_layer  = 6
 n_head   = 6
 n_embd   = 384
-dropout  = 0.1
+dropout  = 0.2    # nanoGPT train_shakespeare_char style — baby net + small data
 bias     = False
 
 # Vanilla nanoGPT — no modern improvements (Task 1 requirement)
@@ -60,18 +60,18 @@ use_qk_norm = False
 label_smoothing = 0.1
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
-learning_rate = 6e-4    # standard peak LR for ~30M GPT (Kaplan et al., 2020)
+learning_rate = 1e-3    # baby net + small data (nanoGPT train_shakespeare_char), not GPT-2 OWT defaults
 max_iters     = 5000    # best val at step 2250 — no need to train past 5K
 weight_decay  = 0.1
 beta1 = 0.9
-beta2 = 0.95
+beta2 = 0.99   # slightly higher — few tokens per iter vs large-scale pretraining
 grad_clip = 1.0
 
 # ── LR schedule — cosine decay ───────────────────────────────────────────────
 decay_lr       = True
 warmup_iters   = 100    # ~2% of 5K run
 lr_decay_iters = 5000   # must match max_iters
-min_lr         = 6e-5   # 0.1 × peak_lr (Chinchilla scaling)
+min_lr         = 1e-4   # 0.1 × peak_lr for 1e-3 schedule
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
 ckpt_interval_secs = 900  # time-based checkpoint every 15 min

@@ -17,7 +17,7 @@ out_dir               = 'out-t2-all-modern'
 eval_interval         = 250
 log_interval          = 10
 eval_iters            = 100
-always_save_checkpoint = True
+always_save_checkpoint = False
 init_from             = 'scratch'
 
 wandb_log      = False
@@ -33,7 +33,7 @@ block_size  = 256
 n_layer  = 6
 n_head   = 6
 n_embd   = 384
-dropout  = 0.1
+dropout  = 0.2
 bias     = False
 
 use_rmsnorm = True
@@ -43,17 +43,17 @@ use_qk_norm = True
 
 label_smoothing = 0.1
 
-learning_rate = 6e-4
+learning_rate = 1e-3
 max_iters     = 5000    # best val at step ~1250 — stop before overfitting
 weight_decay  = 0.1
 beta1 = 0.9
-beta2 = 0.95
+beta2 = 0.99
 grad_clip = 1.0
 
 decay_lr       = True
 warmup_iters   = 100
 lr_decay_iters = 5000   # must match max_iters
-min_lr         = 6e-5
+min_lr         = 1e-4
 
 ckpt_interval_secs = 900
 
