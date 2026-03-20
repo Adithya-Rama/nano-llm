@@ -24,9 +24,16 @@ import sys
 import argparse
 import numpy as np
 
-RATIO_PLAIN       = 0.55
-RATIO_INSTRUCTION = 0.30
-RATIO_STRUCTURED  = 0.15
+# Use this for Task 2 instruction experiment
+# RATIO_PLAIN       = 0.55
+# RATIO_INSTRUCTION = 0.30
+# RATIO_STRUCTURED  = 0.15
+
+# Use this for Task 3
+RATIO_PLAIN       = 1.00
+RATIO_INSTRUCTION = 0.00
+RATIO_STRUCTURED  = 0.00
+
 SEED = 42
 
 INSTRUCTION_TEMPLATES = [
