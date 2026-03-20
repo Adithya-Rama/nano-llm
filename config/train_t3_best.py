@@ -71,7 +71,8 @@ label_smoothing = 0.1
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 6e-4
-max_iters     = 15000   # longer run for larger mixed+TinyStories corpus (~104M tokens)
+# max_iters     = 15000   # longer run for larger mixed+TinyStories corpus (instruction + xml) (~104M tokens)
+max_iters     = 20000   # longer run for larger mixed+TinyStories corpus (text only) (~104M tokens)
 weight_decay  = 0.1
 beta1 = 0.9
 beta2 = 0.95
