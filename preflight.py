@@ -303,10 +303,10 @@ print("\n── 6. Data pipeline ───────────────�
 
 def chk_rocstories_split():
     src = _src("data/rocstories/prepare.py")
-    assert ("indices[:n_val]" in src or "idx[:n_val]" in src or "val_idx" in src), \
-        "Val split not found — verify data/rocstories/prepare.py is correct"
-    return "val split pattern found"
-check("data/rocstories/prepare.py — val split", chk_rocstories_split)
+    assert "eval_stories.txt" in src and "_load_eval_stories_holdout" in src, \
+        "val.bin must come from eval_stories.txt holdout — verify data/rocstories/prepare.py"
+    return "val from eval_stories.txt (no train overlap)"
+check("data/rocstories/prepare.py — val holdout", chk_rocstories_split)
 
 def chk_mixed_leakage():
     src = _src("data/mixed/prepare.py")
@@ -336,7 +336,8 @@ def chk_existing_bins():
     import numpy as np
     bins = {
         "data/rocstories/train.bin": (500_000, 10_000_000),
-        "data/rocstories/val.bin":   (50_000,  1_000_000),
+        # val.bin = eval_stories.txt only (~9 stories, ~few K tokens)
+        "data/rocstories/val.bin":   (500,  500_000),
     }
     found = []
     for rel, (lo, hi) in bins.items():

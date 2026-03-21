@@ -31,8 +31,8 @@ Usage:
     python data/rocstories/prepare.py --structured --out_dir data/rocstories_structured
 
 Outputs:
-    data/rocstories/train.bin   (plain, default)
-    data/rocstories/val.bin
+    data/rocstories/train.bin   (plain, default — all downloaded stories)
+    data/rocstories/val.bin     (tokenised eval_stories.txt only — no overlap with train)
 """
 
 import os
@@ -43,9 +43,8 @@ import numpy as np
 import tiktoken
 
 # -- Hyper-parameters ---------------------------------------------------------
-VAL_FRACTION  = 0.0     # train on ALL stories — professor evaluates on their own held-out set
 SEED          = 42
-VAL_MONITOR   = 500     # small val set kept for training curve monitoring only
+EVAL_STORIES_FILE = 'eval_stories.txt'  # held-out stories for val.bin (must not overlap train)
 MIN_WORDS     = 10      # filter stories that are suspiciously short
 
 # Primary: plain-text dataset (each row is a full story in one text field)
@@ -189,6 +188,21 @@ def load_rocstories(structured=False):
     )
 
 
+def _load_eval_stories_holdout(out_dir):
+    """Load professor / assignment eval stories — never part of HF train download."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    for path in (
+        os.path.join(out_dir, EVAL_STORIES_FILE),
+        os.path.join(script_dir, EVAL_STORIES_FILE),
+    ):
+        if os.path.isfile(path):
+            with open(path, encoding='utf-8') as f:
+                raw = f.read()
+            parts = [p.strip() for p in raw.split('\n\n') if p.strip()]
+            return parts, path
+    return None, None
+
+
 def tokenise_and_save(stories, out_dir):
     """Tokenise all stories and write train.bin / val.bin."""
     enc = tiktoken.get_encoding("gpt2")
@@ -196,16 +210,21 @@ def tokenise_and_save(stories, out_dir):
 
     os.makedirs(out_dir, exist_ok=True)
 
-    # Shuffle — train on ALL stories; tiny val for monitoring only (overlap with train is OK)
+    # Shuffle — train on ALL HF stories (no holdout from this pool for val)
     rng = np.random.default_rng(SEED)
     indices = rng.permutation(len(stories))
+    train_stories = [stories[i] for i in indices]
 
-    # Train on ALL stories — professor tests on their own separate held-out set
-    # Keep a tiny val set (500 stories) just for monitoring curves during training
-    train_stories = [stories[i] for i in indices]          # all stories in train
-    val_stories   = [stories[i] for i in indices[:VAL_MONITOR]]  # 500 for monitoring
+    # Val = separate file only (eval_stories.txt). Never overlaps train — avoids contaminated PPL.
+    val_stories, eval_path = _load_eval_stories_holdout(out_dir)
+    if val_stories is None:
+        raise RuntimeError(
+            f"Missing {EVAL_STORIES_FILE!r} (looked next to output dir and in data/rocstories/). "
+            "Place the professor/assignment eval stories file there so val.bin is a clean holdout."
+        )
 
-    print(f"[prepare] Split: {len(train_stories):,} train | {len(val_stories):,} val (monitor only)")
+    print(f"[prepare] Split: {len(train_stories):,} train (full corpus) | "
+          f"{len(val_stories):,} val (from {os.path.basename(eval_path)} — no train overlap)")
 
     # Print a sample story for verification
     print(f"\n[prepare] Sample story:\n{stories[0][:300]}\n")
@@ -237,7 +256,7 @@ def tokenise_and_save(stories, out_dir):
     print(f"  vocab_size : 50257 (GPT-2 tiktoken BPE)")
     print(f"  train size : {len(train_arr)/1e6:.2f}M tokens")
     print(f"  val size   : {len(val_arr)/1e3:.1f}K tokens")
-    print(f"  train: all stories | val: {VAL_MONITOR} stories (monitor only, overlaps train)")
+    print(f"  val source: {EVAL_STORIES_FILE} (held out — not in train.bin)")
 
 
 if __name__ == '__main__':
