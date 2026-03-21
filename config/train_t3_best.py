@@ -48,10 +48,10 @@ dataset = 'mixed'    # data/mixed/train.bin + val.bin
 
 # ── Data loading ─────────────────────────────────────────────────────────────
 # Mixed ROCStories formats + optional TinyStories prefix (~100M cap) → ~104M+ train tokens
-# Effective batch = 32 × 4 × 256 = 32,768 tokens/step
-# 15,000 steps × 32,768 = 491M token-steps
-gradient_accumulation_steps = 4
-batch_size  = 32
+# Effective batch = 64 × 1 × 256 = 16,384 tokens/step (template-style)
+# 20,000 steps × 16,384 = 328M token-steps
+gradient_accumulation_steps = 1
+batch_size  = 64
 block_size  = 256
 
 # ── Model — All-Modern 30M ─────────────────────────────────────────────────
@@ -67,7 +67,7 @@ use_rope    = True
 use_swiglu  = True
 use_qk_norm = True
 
-label_smoothing = 0.1
+label_smoothing = 0.0
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 1e-3

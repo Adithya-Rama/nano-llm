@@ -42,7 +42,7 @@ use_swiglu  = False
 use_qk_norm = False
 
 # Training enhancements still applied for fair comparison
-label_smoothing = 0.1
+label_smoothing = 0.0
 
 learning_rate = 3e-4
 max_iters     = 20000

@@ -35,11 +35,11 @@ wandb_run_name = 'task1-baseline-30M'
 dataset = 'rocstories'   # data/rocstories/train.bin + val.bin
 
 # ── Data loading ─────────────────────────────────────────────────────────────
-# Effective batch = 32 × 4 × 256 = 32,768 tokens/step
+# Effective batch = 64 × 1 × 256 = 16,384 tokens/step (nanoGPT train_shakespeare_char style)
 # ROCStories train ≈ 3.7M tokens → ~113 steps/epoch
 # 10,000 steps ≈ 88 epochs
-gradient_accumulation_steps = 4
-batch_size  = 32
+gradient_accumulation_steps = 1
+batch_size  = 64
 block_size  = 256
 
 # ── Model — Official baby GPT config ─────────────────────────────────────────
@@ -56,8 +56,8 @@ use_rope    = False
 use_swiglu  = False
 use_qk_norm = False
 
-# Label smoothing for regularisation on the small dataset
-label_smoothing = 0.1
+# No label smoothing — val loss is unsmoothed CE (template has no smoothing)
+label_smoothing = 0.0
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 1e-3    # baby net + small data (nanoGPT train_shakespeare_char), not GPT-2 OWT defaults

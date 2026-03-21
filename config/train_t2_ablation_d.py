@@ -38,8 +38,8 @@ wandb_run_name = 't2-ablation-d-qknorm'
 
 dataset = 'rocstories'
 
-gradient_accumulation_steps = 4
-batch_size  = 32
+gradient_accumulation_steps = 1
+batch_size  = 64
 block_size  = 256
 
 n_layer  = 6
@@ -53,13 +53,13 @@ use_rope    = False
 use_swiglu  = False
 use_qk_norm = True     # ← only change (novel contribution)
 
-label_smoothing = 0.1
+label_smoothing = 0.0
 
-learning_rate = 6e-4
+learning_rate = 1e-3
 max_iters     = 5000    # best val at step ~2250 — stop before overfitting
 weight_decay  = 0.1
 beta1 = 0.9
-beta2 = 0.95
+beta2 = 0.99
 grad_clip = 1.0
 
 decay_lr       = True

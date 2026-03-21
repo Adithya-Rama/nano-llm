@@ -30,8 +30,8 @@ wandb_run_name = 't2-ablation-b-rope'
 
 dataset = 'rocstories'
 
-gradient_accumulation_steps = 4
-batch_size  = 32
+gradient_accumulation_steps = 1
+batch_size  = 64
 block_size  = 256
 
 n_layer  = 6
@@ -45,7 +45,7 @@ use_rope    = True     # ← only change
 use_swiglu  = False
 use_qk_norm = False
 
-label_smoothing = 0.1
+label_smoothing = 0.0
 
 learning_rate = 1e-3
 max_iters     = 5000    # best val at step ~1500 — stop before overfitting

@@ -36,7 +36,7 @@ use_rope    = False   # learned positional embeddings
 use_swiglu  = True    # <<< SwiGLU FFN
 use_qk_norm = False   # No QK-Norm
 
-label_smoothing = 0.1
+label_smoothing = 0.0
 
 learning_rate = 3e-4
 max_iters     = 20000

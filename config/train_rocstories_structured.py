@@ -47,7 +47,7 @@ use_rope    = True
 use_swiglu  = True
 use_qk_norm = True
 
-label_smoothing = 0.1
+label_smoothing = 0.0
 
 learning_rate = 3e-4
 max_iters     = 20000

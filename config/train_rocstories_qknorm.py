@@ -39,7 +39,7 @@ use_rope    = False   # Learned positional embeddings
 use_swiglu  = False   # GELU MLP
 use_qk_norm = True    # <<< QK-Norm (novel contribution)
 
-label_smoothing = 0.1
+label_smoothing = 0.0
 
 learning_rate = 3e-4
 max_iters     = 20000

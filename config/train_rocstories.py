@@ -62,7 +62,7 @@ use_qk_norm = True        # QK-Norm: stabilises attention (Gemma 2, 2024)
 
 # Training enhancements
 use_gradient_checkpointing = False  # Not needed — 152M fits on A100 without it
-label_smoothing = 0.1     # Prevents overconfident predictions on small dataset
+label_smoothing = 0.0
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 3e-4      # peak LR; lower than 6e-4 for stability with larger model

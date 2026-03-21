@@ -58,7 +58,7 @@ use_qk_norm = True
 
 # Training enhancements
 use_gradient_checkpointing = False
-label_smoothing = 0.1
+label_smoothing = 0.0
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 3e-4
