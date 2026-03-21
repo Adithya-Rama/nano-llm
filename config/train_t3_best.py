@@ -71,7 +71,8 @@ label_smoothing = 0.0
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 1e-3
-max_iters     = 10000   # submission — longer than T2 5K; PPL < 25 sprint
+# max_iters     = 15000   # longer run for larger mixed+TinyStories corpus (instruction + xml) (~104M tokens)
+max_iters     = 20000   # longer run for larger mixed+TinyStories corpus (text only) (~104M tokens)
 weight_decay  = 0.1
 beta1 = 0.9
 beta2 = 0.99
@@ -79,8 +80,8 @@ grad_clip = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 100    # ~1% of 10K run
-lr_decay_iters = 10000  # must match max_iters
+warmup_iters   = 200    # ~1% of 20K run
+lr_decay_iters = 20000  # must match max_iters
 min_lr         = 1e-4
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
