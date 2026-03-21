@@ -49,7 +49,7 @@ dataset = 'mixed'    # data/mixed/train.bin + val.bin
 # ── Data loading ─────────────────────────────────────────────────────────────
 # Mixed ROCStories formats + optional TinyStories prefix (~100M cap) → ~104M+ train tokens
 # Effective batch = 64 × 1 × 256 = 16,384 tokens/step (template-style)
-# 10,000 steps × 16,384 = 164M token-steps (submission sprint)
+# 8,000 steps × 16,384 = 131M token-steps (~5.7 passes on 23M dataset)
 gradient_accumulation_steps = 1
 batch_size  = 64
 block_size  = 256
@@ -59,7 +59,7 @@ block_size  = 256
 n_layer  = 7
 n_head   = 6
 n_embd   = 384
-dropout  = 0.2     # baby-GPT / train_shakespeare_char recipe (same as T1/T2)
+dropout  = 0.15    # more regularisation vs memorisation on 23M-token dataset
 bias     = False
 
 use_rmsnorm = True
@@ -71,8 +71,7 @@ label_smoothing = 0.0
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 1e-3
-# max_iters     = 15000   # longer run for larger mixed+TinyStories corpus (instruction + xml) (~104M tokens)
-max_iters     = 20000   # longer run for larger mixed+TinyStories corpus (text only) (~104M tokens)
+max_iters     = 8000    # 8K steps × 16,384 tok/step = 131M token-steps (~5.7 passes on 23M dataset)
 weight_decay  = 0.1
 beta1 = 0.9
 beta2 = 0.99
@@ -80,8 +79,8 @@ grad_clip = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 200    # ~1% of 20K run
-lr_decay_iters = 20000  # must match max_iters
+warmup_iters   = 150    # ~2% of 8K run
+lr_decay_iters = 8000   # must match max_iters
 min_lr         = 1e-4
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
