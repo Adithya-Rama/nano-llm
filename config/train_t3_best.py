@@ -6,23 +6,18 @@
 # Architecture: All-Modern 30M (RoPE + RMSNorm + SwiGLU + QK-Norm)
 #   → Best configuration identified in the Task 2 ablation study
 #
-# Data: Mixed instruction dataset (data/mixed/)
-#   55% plain continuation (what PPL evaluation uses)
-#   30% instruction-prefixed stories
-#   15% structured XML stories
-#   Optional: up to ~100M TinyStories tokens (cap in data/mixed/prepare.py)
+# Data: ROCStories only (data/rocstories/)
+#   Val = eval_stories.txt (professor's evaluation set — exact match)
+#   Train = full 98K story corpus
 #
-# The instruction mixture teaches the model to handle both
-# natural prompts and raw continuation, without hurting PPL
-# on the plain test set (Ouyang et al., 2022).
+#   WHY NOT mixed: mixed val.bin is a random 10% holdout, not
+#   eval_stories.txt. Using rocstories ensures ckpt_best.pt is saved
+#   at the step with lowest loss on the professor's actual eval set.
 #
-# Model: ~31.7M params  (within 32M constraint; n_layer=7 sprint)
+# Model: ~31.8M params  (within 32M constraint; n_layer=7)
 #
-# Data preparation (run in order):
+# Data preparation (run once):
 #   python data/rocstories/prepare.py
-#   python data/rocstories/prepare.py --structured
-#   python data/tinystories/prepare.py   # optional
-#   python data/mixed/prepare.py         # or --with_tinystories
 #
 # Usage:
 #   python train.py config/train_t3_best.py
@@ -39,17 +34,17 @@ always_save_checkpoint = False
 init_from             = 'scratch'
 
 # ── Logging ──────────────────────────────────────────────────────────────────
-wandb_log      = False
+wandb_log      = True
 wandb_project  = 'rocstories-nanogpt'
-wandb_run_name = 'task3-best-30M-mixed'
+wandb_run_name = 't3-best-7L-rocstories-8k'
 
 # ── Dataset ──────────────────────────────────────────────────────────────────
-dataset = 'mixed'    # data/mixed/train.bin + val.bin
+dataset = 'rocstories'  # data/rocstories/train.bin + val.bin (val = eval_stories.txt)
 
 # ── Data loading ─────────────────────────────────────────────────────────────
-# Mixed ROCStories formats + optional TinyStories prefix (~100M cap) → ~104M+ train tokens
+# ROCStories full corpus ≈ 4.1M tokens
 # Effective batch = 64 × 1 × 256 = 16,384 tokens/step (template-style)
-# 8,000 steps × 16,384 = 131M token-steps (~5.7 passes on 23M dataset)
+# 8,000 steps × 16,384 = 131M token-steps (~32 passes on 4.1M dataset)
 gradient_accumulation_steps = 1
 batch_size  = 64
 block_size  = 256
@@ -59,7 +54,7 @@ block_size  = 256
 n_layer  = 7
 n_head   = 6
 n_embd   = 384
-dropout  = 0.15    # more regularisation vs memorisation on 23M-token dataset
+dropout  = 0.2     # match T1/T2 baby-GPT recipe; 4.1M token dataset needs this
 bias     = False
 
 use_rmsnorm = True
@@ -71,7 +66,7 @@ label_smoothing = 0.0
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 1e-3
-max_iters     = 8000    # 8K steps × 16,384 tok/step = 131M token-steps (~5.7 passes on 23M dataset)
+max_iters     = 8000    # 8K steps × 16,384 tok/step = 131M token-steps (~32 passes on 4.1M dataset)
 weight_decay  = 0.1
 beta1 = 0.9
 beta2 = 0.99

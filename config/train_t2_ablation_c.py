@@ -30,9 +30,9 @@ eval_iters            = 100
 always_save_checkpoint = False
 init_from             = 'scratch'
 
-wandb_log      = False
-wandb_project  = 'rocstories-ablations'
-wandb_run_name = 't2-ablation-c-rmsnorm-swiglu'
+wandb_log      = True
+wandb_project  = 'rocstories-nanogpt'
+wandb_run_name = 't2-c-rmsnorm-swiglu-7L'
 
 dataset = 'rocstories'
 

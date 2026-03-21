@@ -51,7 +51,7 @@ always_save_checkpoint = True # if True, always save a checkpoint after each eva
 init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
 wandb_log = False # disabled by default
-wandb_project = 'owt'
+wandb_project = 'rocstories-nanogpt'
 wandb_run_name = 'gpt2' # 'run' + str(time.time())
 # data
 dataset = 'openwebtext'
@@ -398,13 +398,19 @@ while True:
         val_ppl = math.exp(losses['val'])
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, val ppl {val_ppl:.2f}")
         if wandb_log:
-            wandb.log({
+            wandb_dict = {
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
+                "val/ppl": math.exp(losses['val']),
                 "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-            })
+                "mfu": running_mfu * 100,
+            }
+            # Track best val metrics as a flat series for easy dashboard comparison
+            if losses['val'] <= best_val_loss:
+                wandb_dict["best_val/loss"] = losses['val']
+                wandb_dict["best_val/ppl"]  = math.exp(losses['val'])
+            wandb.log(wandb_dict, step=iter_num)
         # Log validation loss
         log_training_step(iter_num, float(losses['train']),
                          val_loss=losses['val'], lr_val=lr, mfu_val=running_mfu)
@@ -463,6 +469,8 @@ while True:
         # get loss as float. note: this is a CPU-GPU sync point
         # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
         lossf = loss.item() * gradient_accumulation_steps
+        if wandb_log:
+            wandb.log({"train/loss_step": lossf, "lr": lr}, step=iter_num)
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu

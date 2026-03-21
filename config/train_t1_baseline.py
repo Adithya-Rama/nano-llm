@@ -27,9 +27,9 @@ always_save_checkpoint = False  # nanoGPT char: only save when val improves (ove
 init_from             = 'scratch'
 
 # ── Logging ──────────────────────────────────────────────────────────────────
-wandb_log      = False
+wandb_log      = True
 wandb_project  = 'rocstories-nanogpt'
-wandb_run_name = 'task1-baseline-30M'
+wandb_run_name = 't1-baseline-7L-31.8M'
 
 # ── Dataset ──────────────────────────────────────────────────────────────────
 dataset = 'rocstories'   # data/rocstories/train.bin + val.bin

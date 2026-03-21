@@ -20,13 +20,17 @@
 #   python data/tinystories/prepare.py
 #   python data/combined/prepare.py
 #
-# Usage:
+# Usage — Stage 1 (this config):
 #   python train.py config/train_t4_arena.py
-#   python train.py config/train_t4_arena.py --init_from=resume
+#
+# After Stage 1 completes, run Stage 2:
+#   mkdir -p out-t4-arena
+#   cp out-t4-pretrain/ckpt_best.pt out-t4-arena/ckpt.pt
+#   python train.py config/train_t4_finetune.py
 # ============================================================
 
 # ── I/O ──────────────────────────────────────────────────────────────────────
-out_dir               = 'out-t4-arena'
+out_dir               = 'out-t4-pretrain'
 eval_interval         = 500
 log_interval          = 20   # heavier model — log every 20 steps to keep JSONL manageable
 eval_iters            = 100
@@ -35,9 +39,9 @@ always_save_checkpoint = True
 init_from             = 'scratch'
 
 # ── Logging ──────────────────────────────────────────────────────────────────
-wandb_log      = False
+wandb_log      = True
 wandb_project  = 'rocstories-nanogpt'
-wandb_run_name = 'task4-arena-152M'
+wandb_run_name = 't4-pretrain-124M-20k'
 
 # ── Dataset ──────────────────────────────────────────────────────────────────
 dataset = 'combined'   # data/combined/train.bin + val.bin

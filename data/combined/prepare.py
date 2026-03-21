@@ -169,7 +169,7 @@ def build_combined(with_writing_prompts=False, with_childrens=False, dry_run=Fal
     tiny_train = os.path.join(data_dir, 'tinystories', 'train.bin')
     tiny_val   = os.path.join(data_dir, 'tinystories', 'val.bin')
     if os.path.exists(tiny_train):
-        all_train_stories.extend(_stream_tinystories(tiny_train))
+        all_train_stories.extend(_stream_tinystories(tiny_train, max_tokens=50_000_000))  # 50M cap — keeps ROCStories at ~14% of corpus
     else:
         print("[combine] ⚠  TinyStories train.bin not found — run data/tinystories/prepare.py")
     if os.path.exists(tiny_val):

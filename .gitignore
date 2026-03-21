@@ -16,17 +16,7 @@ notes
 .claude/
 results
 
-config/train_rocstories_baseline.py
-config/train_rocstories_rope_only.py
-config/train_rocstories_rmsnorm_swiglu.py
-config/train_rocstories_qknorm.py
-config/train_rocstories.py
-config/train_rocstories_structured.py
-
-config/train_shakespeare_char.py
-config/finetune_shakespeare.py
-config/train_gpt2.py
-config/eval_gpt2*.py
-
 config/unused
 data/unused
+
+verification
