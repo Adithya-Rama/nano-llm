@@ -8,7 +8,7 @@
 # Serves as the reference for measuring the gain from each
 # architectural modification in Ablations B–E.
 #
-# Model: ~30.2M params  (within 32M constraint)
+# Model: ~31.8M params  (within 32M constraint; n_layer=7 sprint)
 # ============================================================
 
 out_dir               = 'out-t2-vanilla'
@@ -28,7 +28,7 @@ gradient_accumulation_steps = 1
 batch_size  = 64
 block_size  = 256
 
-n_layer  = 6
+n_layer  = 7
 n_head   = 6
 n_embd   = 384
 dropout  = 0.2    # match train_shakespeare_char / baby-GPT recipe

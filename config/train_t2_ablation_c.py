@@ -20,7 +20,7 @@
 #   Shazeer, N. (2020). GLU variants improve transformer.
 #     arXiv:2002.05202.
 #
-# Model: ~30.2M params  (SwiGLU 8/3 scaling keeps param count equal)
+# Model: ~31.8M params  (SwiGLU 8/3 scaling; n_layer=7 sprint)
 # ============================================================
 
 out_dir               = 'out-t2-ffn'
@@ -40,7 +40,7 @@ gradient_accumulation_steps = 1
 batch_size  = 64
 block_size  = 256
 
-n_layer  = 6
+n_layer  = 7
 n_head   = 6
 n_embd   = 384
 dropout  = 0.2

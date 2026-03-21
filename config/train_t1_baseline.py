@@ -6,7 +6,7 @@
 # Follows the official nanoGPT "baby GPT" configuration:
 #   https://github.com/karpathy/nanoGPT/blob/master/config/train_shakespeare_char.py
 #
-# Prof constraint: n_layer=6, n_head=6, n_embd=384  ≈ 30.2M params
+# Prof constraint: n_layer=7, n_head=6, n_embd=384  ≈ 31.8M params (PPL sprint)
 #                 (must not exceed 32M total params)
 #
 # Architecture: Vanilla nanoGPT (learned PE, LayerNorm, GELU MLP)
@@ -36,15 +36,14 @@ dataset = 'rocstories'   # data/rocstories/train.bin + val.bin
 
 # ── Data loading ─────────────────────────────────────────────────────────────
 # Effective batch = 64 × 1 × 256 = 16,384 tokens/step (nanoGPT train_shakespeare_char style)
-# ROCStories train ≈ 3.7M tokens → ~113 steps/epoch
-# 10,000 steps ≈ 88 epochs
+# ROCStories train ≈ full corpus (~4.1M tok); val = 500 stories monitor only
 gradient_accumulation_steps = 1
 batch_size  = 64
 block_size  = 256
 
 # ── Model — Official baby GPT config ─────────────────────────────────────────
-# Total params ≈ 30.2M  (within 32M constraint)
-n_layer  = 6
+# Total params ≈ 31.8M  (within 32M constraint)
+n_layer  = 7
 n_head   = 6
 n_embd   = 384
 dropout  = 0.2    # nanoGPT train_shakespeare_char style — baby net + small data

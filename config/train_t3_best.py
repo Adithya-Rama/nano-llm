@@ -16,7 +16,7 @@
 # natural prompts and raw continuation, without hurting PPL
 # on the plain test set (Ouyang et al., 2022).
 #
-# Model: ~30.1M params  (within 32M constraint)
+# Model: ~31.7M params  (within 32M constraint; n_layer=7 sprint)
 #
 # Data preparation (run in order):
 #   python data/rocstories/prepare.py
@@ -49,14 +49,14 @@ dataset = 'mixed'    # data/mixed/train.bin + val.bin
 # ── Data loading ─────────────────────────────────────────────────────────────
 # Mixed ROCStories formats + optional TinyStories prefix (~100M cap) → ~104M+ train tokens
 # Effective batch = 64 × 1 × 256 = 16,384 tokens/step (template-style)
-# 20,000 steps × 16,384 = 328M token-steps
+# 10,000 steps × 16,384 = 164M token-steps (submission sprint)
 gradient_accumulation_steps = 1
 batch_size  = 64
 block_size  = 256
 
 # ── Model — All-Modern 30M ─────────────────────────────────────────────────
-# Total params ≈ 30.1M  (within 32M constraint)
-n_layer  = 6
+# Total params ≈ 31.7M  (within 32M constraint)
+n_layer  = 7
 n_head   = 6
 n_embd   = 384
 dropout  = 0.2     # baby-GPT / train_shakespeare_char recipe (same as T1/T2)
@@ -71,8 +71,7 @@ label_smoothing = 0.0
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 1e-3
-# max_iters     = 15000   # longer run for larger mixed+TinyStories corpus (instruction + xml) (~104M tokens)
-max_iters     = 20000   # longer run for larger mixed+TinyStories corpus (text only) (~104M tokens)
+max_iters     = 10000   # submission — longer than T2 5K; PPL < 25 sprint
 weight_decay  = 0.1
 beta1 = 0.9
 beta2 = 0.99
@@ -80,8 +79,8 @@ grad_clip = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 200    # ~1% of 20K run
-lr_decay_iters = 20000  # must match max_iters
+warmup_iters   = 100    # ~1% of 10K run
+lr_decay_iters = 10000  # must match max_iters
 min_lr         = 1e-4
 
 # ── Colab resilience ─────────────────────────────────────────────────────────

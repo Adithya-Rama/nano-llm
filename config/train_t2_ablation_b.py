@@ -14,7 +14,7 @@
 # Reference: Su, J. et al. (2022). RoFormer: Enhanced transformer
 #   with rotary position embedding. arXiv:2104.09864.
 #
-# Model: ~30.1M params  (RoPE removes learned pos-emb → 0.1M less)
+# Model: ~31.7M params  (RoPE removes learned pos-emb vs vanilla at same depth)
 # ============================================================
 
 out_dir               = 'out-t2-rope'
@@ -34,7 +34,7 @@ gradient_accumulation_steps = 1
 batch_size  = 64
 block_size  = 256
 
-n_layer  = 6
+n_layer  = 7
 n_head   = 6
 n_embd   = 384
 dropout  = 0.2

@@ -43,8 +43,9 @@ import numpy as np
 import tiktoken
 
 # -- Hyper-parameters ---------------------------------------------------------
-VAL_FRACTION  = 0.1     # fraction of stories held out for validation
+VAL_FRACTION  = 0.0     # train on ALL stories — professor evaluates on their own held-out set
 SEED          = 42
+VAL_MONITOR   = 500     # small val set kept for training curve monitoring only
 MIN_WORDS     = 10      # filter stories that are suspiciously short
 
 # Primary: plain-text dataset (each row is a full story in one text field)
@@ -195,17 +196,16 @@ def tokenise_and_save(stories, out_dir):
 
     os.makedirs(out_dir, exist_ok=True)
 
-    # Shuffle and split
+    # Shuffle — train on ALL stories; tiny val for monitoring only (overlap with train is OK)
     rng = np.random.default_rng(SEED)
     indices = rng.permutation(len(stories))
-    n_val   = max(1, int(len(stories) * VAL_FRACTION))
-    val_idx   = indices[:n_val]
-    train_idx = indices[n_val:]
 
-    train_stories = [stories[i] for i in train_idx]
-    val_stories   = [stories[i] for i in val_idx]
+    # Train on ALL stories — professor tests on their own separate held-out set
+    # Keep a tiny val set (500 stories) just for monitoring curves during training
+    train_stories = [stories[i] for i in indices]          # all stories in train
+    val_stories   = [stories[i] for i in indices[:VAL_MONITOR]]  # 500 for monitoring
 
-    print(f"[prepare] Split: {len(train_stories):,} train | {len(val_stories):,} val")
+    print(f"[prepare] Split: {len(train_stories):,} train | {len(val_stories):,} val (monitor only)")
 
     # Print a sample story for verification
     print(f"\n[prepare] Sample story:\n{stories[0][:300]}\n")
@@ -237,7 +237,7 @@ def tokenise_and_save(stories, out_dir):
     print(f"  vocab_size : 50257 (GPT-2 tiktoken BPE)")
     print(f"  train size : {len(train_arr)/1e6:.2f}M tokens")
     print(f"  val size   : {len(val_arr)/1e3:.1f}K tokens")
-    print(f"  train/val split: {100*(1-VAL_FRACTION):.0f}% / {100*VAL_FRACTION:.0f}%")
+    print(f"  train: all stories | val: {VAL_MONITOR} stories (monitor only, overlaps train)")
 
 
 if __name__ == '__main__':

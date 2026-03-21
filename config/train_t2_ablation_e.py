@@ -10,7 +10,7 @@
 # the upper bound for the architecture ablation study.
 # Comparing with A–D isolates each component's contribution.
 #
-# Model: ~30.1M params  (within 32M constraint)
+# Model: ~31.7M params  (within 32M constraint; n_layer=7 sprint)
 # ============================================================
 
 out_dir               = 'out-t2-all-modern'
@@ -30,7 +30,7 @@ gradient_accumulation_steps = 1
 batch_size  = 64
 block_size  = 256
 
-n_layer  = 6
+n_layer  = 7
 n_head   = 6
 n_embd   = 384
 dropout  = 0.2

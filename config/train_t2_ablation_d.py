@@ -22,7 +22,7 @@
 #   Team, G. (2024). Gemma 2: Improving open language
 #     models at a practical size. arXiv:2408.00118.
 #
-# Model: ~30.2M params  (QK-Norm adds only 2×head_dim=128 params per layer)
+# Model: ~31.8M params  (QK-Norm adds only 2×head_dim=128 params per layer)
 # ============================================================
 
 out_dir               = 'out-t2-qknorm'
@@ -42,7 +42,7 @@ gradient_accumulation_steps = 1
 batch_size  = 64
 block_size  = 256
 
-n_layer  = 6
+n_layer  = 7
 n_head   = 6
 n_embd   = 384
 dropout  = 0.2
