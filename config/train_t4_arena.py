@@ -41,16 +41,16 @@ init_from             = 'scratch'
 # ── Logging ──────────────────────────────────────────────────────────────────
 wandb_log      = True
 wandb_project  = 'rocstories-nanogpt'
-wandb_run_name = 't4-pretrain-124M-20k'
+wandb_run_name = 't4-pretrain-124M-30k-v2'
 
 # ── Dataset ──────────────────────────────────────────────────────────────────
 dataset = 'combined'   # data/combined/train.bin + val.bin
 
 # ── Data loading ─────────────────────────────────────────────────────────────
-# Combined ≈ 110M tokens
+# Combined ≈ 220M tokens (ROCStories 5x upsampled + full 200M TinyStories)
 # Effective batch = 32 × 8 × 512 = 131,072 tokens/step
-# 20,000 steps × 131,072 = 2.6B token-steps ≈ 26 passes (combined corpus)
-# block_size=512: WritingPrompts stories avg 600 tokens — must be at least 512
+# 30,000 steps × 131,072 = 3.93B token-steps ≈ 18 passes (healthy for 124M)
+# Best checkpoint expected around step 15K-20K (vs step 2K with 54M corpus)
 gradient_accumulation_steps = 8
 batch_size  = 32
 block_size  = 512
@@ -59,7 +59,7 @@ block_size  = 512
 n_layer  = 12
 n_head   = 12
 n_embd   = 768
-dropout  = 0.0     # no dropout for large-scale pretraining
+dropout  = 0.1     # regularise — 124M model on 220M tokens needs this
 bias     = False
 
 use_rmsnorm = True
@@ -72,7 +72,7 @@ label_smoothing = 0.0    # skip label smoothing for pretraining
 # ── Optimizer ────────────────────────────────────────────────────────────────
 # NOTE: Not using train_shakespeare_char recipe (1e-3 / dropout 0.2) — 152M + large corpus = pretraining scale
 learning_rate = 3e-4    # lower LR for stability with 152M model
-max_iters     = 20000
+max_iters     = 30000
 weight_decay  = 0.1
 beta1 = 0.9
 beta2 = 0.95
@@ -80,8 +80,8 @@ grad_clip = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 200     # ~1% of 20K run
-lr_decay_iters = 20000
+warmup_iters   = 300     # ~1% of 30K run
+lr_decay_iters = 30000
 min_lr         = 3e-5
 
 # ── Colab resilience ─────────────────────────────────────────────────────────

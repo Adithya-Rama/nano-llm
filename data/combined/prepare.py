@@ -159,7 +159,9 @@ def build_combined(with_writing_prompts=False, with_childrens=False, dry_run=Fal
     roc_train = os.path.join(data_dir, 'rocstories', 'train.bin')
     roc_val   = os.path.join(data_dir, 'rocstories', 'val.bin')
     if os.path.exists(roc_train):
-        all_train_stories.extend(_load_stories_from_bin(roc_train, "ROCStories train"))
+        _roc = _load_stories_from_bin(roc_train, "ROCStories train")
+        all_train_stories.extend(_roc * 5)   # 5x upsample: ROCStories → 9% of corpus (20.5M / 220M)
+        print(f"[combine]   ROCStories 5x upsampled: {len(_roc)*5:,} story copies")
     else:
         print("[combine] ⚠  ROCStories train.bin not found — run data/rocstories/prepare.py")
     if os.path.exists(roc_val):
@@ -169,7 +171,7 @@ def build_combined(with_writing_prompts=False, with_childrens=False, dry_run=Fal
     tiny_train = os.path.join(data_dir, 'tinystories', 'train.bin')
     tiny_val   = os.path.join(data_dir, 'tinystories', 'val.bin')
     if os.path.exists(tiny_train):
-        all_train_stories.extend(_stream_tinystories(tiny_train, max_tokens=50_000_000))  # 50M cap — keeps ROCStories at ~14% of corpus
+        all_train_stories.extend(_stream_tinystories(tiny_train, max_tokens=200_000_000))  # full TinyStories — 200M tokens
     else:
         print("[combine] ⚠  TinyStories train.bin not found — run data/tinystories/prepare.py")
     if os.path.exists(tiny_val):

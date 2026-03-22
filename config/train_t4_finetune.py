@@ -25,12 +25,12 @@ eval_interval         = 200
 log_interval          = 10
 eval_iters            = 100
 eval_only             = False
-always_save_checkpoint = False
+always_save_checkpoint = True   # CRITICAL: val_loss never beats Stage 1 best — must force save
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 wandb_log      = True
 wandb_project  = 'rocstories-nanogpt'
-wandb_run_name = 't4-finetune-124M-2k'
+wandb_run_name = 't4-finetune-124M-8k-v2'
 
 # ── Dataset ──────────────────────────────────────────────────────────────────
 dataset = 'rocstories_instruction'  # instruction-format stories for fine-tuning
@@ -38,6 +38,7 @@ dataset = 'rocstories_instruction'  # instruction-format stories for fine-tuning
 # ── Data loading ─────────────────────────────────────────────────────────────
 # Same batch config as Stage 1 — must match for resume to work cleanly
 # Effective batch = 16 × 8 × 512 = 65,536 tokens/step
+# 8,000 steps × 65,536 = 524M token-steps ≈ 100 passes over instruction data
 batch_size                  = 16
 gradient_accumulation_steps = 8
 block_size                  = 512
@@ -55,11 +56,11 @@ use_qk_norm = True
 use_gradient_checkpointing = True   # needed for 124M on Colab
 
 # ── Regularisation ───────────────────────────────────────────────────────────
-dropout         = 0.05    # light dropout for fine-tuning (was 0.1 in pretrain)
+dropout         = 0.1     # more regularisation — 8K steps on 5.25M tokens
 label_smoothing = 0.0
 
 # ── Optimizer — lower LR for fine-tuning to avoid forgetting ─────────────────
-learning_rate = 1e-4    # 3× lower than Stage 1 pretrain (3e-4)
+learning_rate = 2e-4    # higher to overwrite TinyStories patterns from Stage 1
 min_lr        = 1e-5
 beta1         = 0.9
 beta2         = 0.99    # higher than pretrain's 0.95 — fine-tuning is more stable
@@ -68,10 +69,9 @@ grad_clip     = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 50      # short warmup — already pretrained
-max_iters      = 2000    # just enough to learn instruction format
-lr_decay_iters = 2000
-min_lr         = 1e-5
+warmup_iters   = 200     # ~2.5% of 8K run
+max_iters      = 8000    # 8K × 65K = 524M token-steps — enough to overwrite TinyStories
+lr_decay_iters = 8000
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
 ckpt_interval_secs = 900

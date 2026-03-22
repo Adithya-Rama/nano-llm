@@ -1,9 +1,13 @@
 """
 ROCStories Instruction Format for T4 Arena Fine-tuning.
-Formats each story as: "Write a story about: {title}\n{story_body}"
-Used for Stage 2 instruction fine-tuning of the T4 arena model.
 
-Prereq: data/rocstories/val.bin must exist (run data/rocstories/prepare.py first).
+Dataset has only a 'text' column (confirmed: mintujupally/ROCStories).
+Format: "Continue this story: {first_sentence}\n{full_story}"
+
+This matches arena judging exactly — prof gives opening sentence,
+model continues. Stage 2 fine-tune teaches this exact pattern.
+
+Prereq: data/rocstories/train.bin must exist.
 
 Usage:
     python data/rocstories_instruction/prepare.py
@@ -13,8 +17,9 @@ import sys
 import numpy as np
 import tiktoken
 
-SEED = 42
+SEED       = 42
 HF_DATASET = "mintujupally/ROCStories"
+VAL_FRAC   = 0.05   # 5% of stories held out for val monitoring
 
 
 def load_and_format():
@@ -25,61 +30,64 @@ def load_and_format():
     try:
         ds = load_dataset(HF_DATASET, split="train")
     except Exception as e:
-        print(f"Error loading dataset: {e}")
+        print(f"[rocstories_instruction] Error loading dataset: {e}")
         sys.exit(1)
 
-    stories = []
-    for row in ds:
-        raw   = (row.get('text', '') or '').strip()
-        title = (row.get('storytitle', '') or row.get('title', '') or '').strip()
+    print(f"[rocstories_instruction] Dataset columns: {ds.column_names}")
 
-        if raw and title:
-            text = f"Write a story about: {title}\n{raw}"
-        elif title:
-            # Tabular format (sentence1..sentence5 columns)
-            sents = [row.get(f'sentence{i}', '').strip() for i in range(1, 6)]
-            sents = [s for s in sents if s]
-            if not sents:
-                continue
-            text = f"Write a story about: {title}\n{' '.join(sents)}"
-        else:
-            # No title → skip (instruction format needs a title prompt)
+    stories = []
+    skipped = 0
+    for row in ds:
+        text = (row.get("text", "") or "").strip()
+        if not text or len(text.split()) < 10:
+            skipped += 1
             continue
 
-        if len(text.split()) >= 10:
-            stories.append(text)
+        # Extract first sentence as the continuation prompt
+        # Split on '. ' to get sentences, take first one
+        dot_idx = text.find(". ")
+        if dot_idx > 0 and dot_idx < len(text) - 2:
+            first_sentence = text[: dot_idx + 1].strip()
+        else:
+            # fallback: use first 10 words
+            words = text.split()
+            first_sentence = " ".join(words[:10]) + "."
 
-    print(f"[rocstories_instruction] Loaded {len(stories):,} instruction-format stories")
+        # Instruction format: matches arena prompt style exactly
+        formatted = f"Continue this story: {first_sentence}\n{text}"
+        stories.append(formatted)
+
+    print(f"[rocstories_instruction] Loaded {len(stories):,} stories "
+          f"(skipped {skipped} short/empty)")
 
     # Shuffle deterministically
     rng = np.random.default_rng(SEED)
-    stories = [stories[i] for i in rng.permutation(len(stories))]
+    idx = rng.permutation(len(stories))
+    stories = [stories[i] for i in idx]
 
-    # Encode all stories
-    all_tokens = []
-    for story in stories:
-        all_tokens.extend(enc.encode_ordinary(story))
-        all_tokens.append(eot)
+    # Split train / val
+    n_val   = max(100, int(len(stories) * VAL_FRAC))
+    n_train = len(stories) - n_val
+    train_stories = stories[:n_train]
+    val_stories   = stories[n_train:]
 
-    arr = np.array(all_tokens, dtype=np.uint16)
+    print(f"[rocstories_instruction] Split: {n_train:,} train | {n_val:,} val")
+
     out_dir = os.path.dirname(os.path.abspath(__file__))
     os.makedirs(out_dir, exist_ok=True)
 
-    arr.tofile(os.path.join(out_dir, 'train.bin'))
-    print(f"[rocstories_instruction] train.bin: {len(arr)/1e6:.2f}M tokens")
+    for split, split_stories in [("train", train_stories), ("val", val_stories)]:
+        all_tokens = []
+        for story in split_stories:
+            all_tokens.extend(enc.encode_ordinary(story))
+            all_tokens.append(eot)
+        arr = np.array(all_tokens, dtype=np.uint16)
+        out_path = os.path.join(out_dir, f"{split}.bin")
+        arr.tofile(out_path)
+        print(f"[rocstories_instruction] {split}.bin: {len(arr)/1e6:.2f}M tokens → {out_path}")
 
-    # Val = reuse rocstories/val.bin (eval_stories.txt — plain format for PPL monitoring)
-    import shutil
-    roc_val = os.path.join(os.path.dirname(__file__), '..', 'rocstories', 'val.bin')
-    roc_val = os.path.normpath(roc_val)
-    if os.path.exists(roc_val):
-        shutil.copy(roc_val, os.path.join(out_dir, 'val.bin'))
-        print(f"[rocstories_instruction] val.bin: copied from rocstories/val.bin (eval_stories.txt)")
-    else:
-        print(f"[rocstories_instruction] WARNING: rocstories/val.bin not found — run data/rocstories/prepare.py first")
-
-    print(f"[rocstories_instruction] Done → {out_dir}/")
+    print(f"[rocstories_instruction] Done.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     load_and_format()
