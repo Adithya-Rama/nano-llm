@@ -508,7 +508,8 @@ class GPT(nn.Module):
     def generate(self, idx: torch.Tensor, max_new_tokens: int,
                  temperature: float = 1.0, top_k: int = None,
                  top_p: float = 1.0,
-                 repetition_penalty: float = 1.0) -> torch.Tensor:
+                 repetition_penalty: float = 1.0,
+                 stop_token: int = None) -> torch.Tensor:
         """Autoregressive generation with temperature, top-k, nucleus (top-p),
         and repetition penalty sampling.
 
@@ -519,6 +520,9 @@ class GPT(nn.Module):
             top_k:              keep only the top-k logits (None = no filter)
             top_p:              nucleus sampling probability mass (1.0 = no filter)
             repetition_penalty: penalise already-seen tokens (1.0 = no penalty)
+            stop_token:         stop generation immediately when this token id is
+                                produced (e.g. 50256 for GPT-2 <|endoftext|>).
+                                None = no early stop, run full max_new_tokens.
         """
         for _ in range(max_new_tokens):
             idx_cond = idx if idx.size(1) <= self.config.block_size \
@@ -558,5 +562,8 @@ class GPT(nn.Module):
             probs = F.softmax(logits, dim=-1)
             idx_next = torch.multinomial(probs, num_samples=1)
             idx = torch.cat((idx, idx_next), dim=1)
+            # Early stop: halt when stop_token is produced (e.g. EOT)
+            if stop_token is not None and (idx_next == stop_token).any():
+                break
 
         return idx

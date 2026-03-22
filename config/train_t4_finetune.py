@@ -4,12 +4,13 @@
 # TASK 4 — Arena Model (Stage 2: Instruction Fine-tune)
 #
 # Resumes from Stage 1 pretrain checkpoint (out-t4-arena/ckpt.pt).
-# Fine-tunes on instruction-format stories so the model learns
-# to respond to "Write a story about: {title}" prompts for arena judging.
+# Fine-tunes on plain ROCStories so the model learns adult 5-sentence
+# narrative style and overrides TinyStories bleed from Stage 1 pretraining.
+# Arena task = plain story completion (same as T3 evaluation format).
 #
 # PREREQS (run in order):
-#   1. python data/rocstories/prepare.py         (creates rocstories/val.bin)
-#   2. python data/rocstories_instruction/prepare.py
+#   1. python data/rocstories/prepare.py         (creates rocstories/train.bin)
+#   2. python data/rocstories_plain/prepare.py
 #   3. python train.py config/train_t4_arena.py  (Stage 1 pretrain)
 #   4. mkdir -p out-t4-arena
 #      cp out-t4-pretrain/ckpt_best.pt out-t4-arena/ckpt.pt
@@ -30,15 +31,15 @@ always_save_checkpoint = True   # CRITICAL: val_loss never beats Stage 1 best �
 # ── Logging ──────────────────────────────────────────────────────────────────
 wandb_log      = True
 wandb_project  = 'rocstories-nanogpt'
-wandb_run_name = 't4-finetune-124M-8k-v2'
+wandb_run_name = 't4-finetune-124M-plain-roc'
 
 # ── Dataset ──────────────────────────────────────────────────────────────────
-dataset = 'rocstories_instruction'  # instruction-format stories for fine-tuning
+dataset = 'rocstories_plain'        # plain ROCStories — pure story completion
 
 # ── Data loading ─────────────────────────────────────────────────────────────
 # Same batch config as Stage 1 — must match for resume to work cleanly
 # Effective batch = 16 × 8 × 512 = 65,536 tokens/step
-# 8,000 steps × 65,536 = 524M token-steps ≈ 100 passes over instruction data
+# 7,000 steps × 65,536 = 459M token-steps ≈ 100 passes over 4.1M ROCStories
 batch_size                  = 16
 gradient_accumulation_steps = 8
 block_size                  = 512
@@ -56,7 +57,7 @@ use_qk_norm = True
 use_gradient_checkpointing = True   # needed for 124M on Colab
 
 # ── Regularisation ───────────────────────────────────────────────────────────
-dropout         = 0.1     # more regularisation — 8K steps on 5.25M tokens
+dropout         = 0.1     # more regularisation — long fine-tune on plain ROCStories
 label_smoothing = 0.0
 
 # ── Optimizer — lower LR for fine-tuning to avoid forgetting ─────────────────
@@ -69,9 +70,9 @@ grad_clip     = 1.0
 
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
-warmup_iters   = 200     # ~2.5% of 8K run
-max_iters      = 8000    # 8K × 65K = 524M token-steps — enough to overwrite TinyStories
-lr_decay_iters = 8000
+warmup_iters   = 100     # short re-warmup after dataset switch
+max_iters      = 32000
+lr_decay_iters = 32000
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
 ckpt_interval_secs = 900

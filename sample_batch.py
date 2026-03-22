@@ -9,6 +9,52 @@ import torch
 import tiktoken
 from model import GPTConfig, GPT
 
+import re as _re
+
+
+def _enforce_five_sentences(text: str, prompt: str = "") -> str:
+    """Enforce exactly 5 complete sentences in generated story text.
+
+    Rules:
+    - Strip echoed prompt from beginning if present
+    - Split on sentence-ending punctuation (. ! ?)
+    - Keep only COMPLETE sentences (ending with . ! ?)
+    - Trailing fragment (no ending punctuation) = model was cut mid-sentence
+      → drop it entirely (a fragment is worse than 4 complete sentences)
+    - If >= 5 complete sentences: keep first 5
+    - If < 5 complete sentences: keep all complete ones
+    """
+    # Strip the echoed prompt from the beginning if present
+    if prompt and text.startswith(prompt.strip()):
+        text = text[len(prompt.strip()):].strip()
+
+    if not text:
+        return text
+
+    # Split into candidate sentences on . ! ? boundaries
+    parts = _re.split(r'(?<=[.!?])\s+', text.strip())
+    parts = [p.strip() for p in parts if p.strip()]
+
+    if not parts:
+        return text
+
+    # Keep only COMPLETE sentences (ending with punctuation)
+    # Drop everything from the first fragment onward
+    complete = []
+    for p in parts:
+        if p[-1] in '.!?':
+            complete.append(p)
+        else:
+            break  # fragment — stop here, drop this and everything after
+
+    if not complete:
+        # Nothing complete — return raw text as fallback
+        return text
+
+    # Trim to 5 if we have more
+    result = ' '.join(complete[:5])
+    return result
+
 # -----------------------------------------------------------------------------
 init_from = 'gpt2' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
 out_dir = 'out' # ignored if init_from is not 'resume'
@@ -16,7 +62,7 @@ start = "FILE:data/rocstories/eval_prompts.txt" # Prompt. Can also specify a fil
 batch_prompts = True # if True, read multiple prompts from the file (one per line)
 output_file = 'samples.jsonl' # file to save generated samples in JSONL format (set to None to disable)
 num_samples = 1 # number of samples to generate for each prompt
-max_new_tokens = 512 # number of tokens generated in each sample``
+max_new_tokens = 100 # 5-sentence ROCStory needs ~45-95 tokens to generate
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
@@ -120,11 +166,15 @@ with torch.no_grad():
                 prompt_header = f"\n=== Prompt {prompt_idx + 1}: {prompt_text} ==="
                 print(prompt_header)
             for k in range(num_samples):
-                y = model.generate(x, max_new_tokens, **sample_params)
-                sample_text = decode(y[0].tolist())
-                # Delete context after <|endoftext|>
-                if '<|endoftext|>' in sample_text:
-                    sample_text = sample_text.split('<|endoftext|>')[0]
+                y = model.generate(x, max_new_tokens, stop_token=50256,
+                                   **sample_params)
+                tokens = y[0].tolist()
+                # Trim at EOT token (50256) — prevents second-story bleed
+                if 50256 in tokens:
+                    tokens = tokens[:tokens.index(50256)]
+                sample_text = decode(tokens)
+                # Enforce exactly 5 complete sentences
+                sample_text = _enforce_five_sentences(sample_text, prompt_text)
                 print(sample_text)
                 print('---------------')
                 
