@@ -4,13 +4,15 @@
 # TASK 4 — Arena Model (Stage 2: Instruction Fine-tune)
 #
 # Resumes from Stage 1 pretrain checkpoint (out-t4-arena/ckpt.pt).
-# Fine-tunes on plain ROCStories so the model learns adult 5-sentence
-# narrative style and overrides TinyStories bleed from Stage 1 pretraining.
+# Fine-tunes on gpt-oss-120B synthetic stories mixed with original ROCStories.
+# Synthetic data provides superior causal narrative reasoning patterns.
+# Overrides TinyStories bleed and teaches adult 5-sentence story completion.
 # Arena task = plain story completion (same as T3 evaluation format).
 #
 # PREREQS (run in order):
 #   1. python data/rocstories/prepare.py         (creates rocstories/train.bin)
-#   2. python data/rocstories_plain/prepare.py
+#   2. python data/rocstories_synthetic/prepare.py \
+#        --json_path synthetic_stories_gptoss120b.json
 #   3. python train.py config/train_t4_arena.py  (Stage 1 pretrain)
 #   4. mkdir -p out-t4-arena
 #      cp out-t4-pretrain/ckpt_best.pt out-t4-arena/ckpt.pt
@@ -31,15 +33,15 @@ always_save_checkpoint = True   # CRITICAL: val_loss never beats Stage 1 best �
 # ── Logging ──────────────────────────────────────────────────────────────────
 wandb_log      = True
 wandb_project  = 'rocstories-nanogpt'
-wandb_run_name = 't4-finetune-124M-plain-roc'
+wandb_run_name = 't4-finetune-124M-synthetic-gptoss120b'
 
 # ── Dataset ──────────────────────────────────────────────────────────────────
-dataset = 'rocstories_plain'        # plain ROCStories — pure story completion
+dataset = 'rocstories_synthetic'    # gpt-oss-120B synthetic + original mix
 
 # ── Data loading ─────────────────────────────────────────────────────────────
 # Same batch config as Stage 1 — must match for resume to work cleanly
 # Effective batch = 16 × 8 × 512 = 65,536 tokens/step
-# 7,000 steps × 65,536 = 459M token-steps ≈ 100 passes over 4.1M ROCStories
+# 5,000 steps × 65,536 = 327M token-steps ≈ 15 passes over 22M synthetic corpus
 batch_size                  = 16
 gradient_accumulation_steps = 8
 block_size                  = 512
@@ -61,7 +63,7 @@ dropout         = 0.1     # more regularisation — long fine-tune on plain ROCS
 label_smoothing = 0.0
 
 # ── Optimizer — lower LR for fine-tuning to avoid forgetting ─────────────────
-learning_rate = 2e-4    # higher to overwrite TinyStories patterns from Stage 1
+learning_rate = 1e-4    # lower LR — synthetic data is cleaner, gentler fine-tune
 min_lr        = 1e-5
 beta1         = 0.9
 beta2         = 0.99    # higher than pretrain's 0.95 — fine-tuning is more stable
@@ -71,8 +73,8 @@ grad_clip     = 1.0
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
 warmup_iters   = 100     # short re-warmup after dataset switch
-max_iters      = 32000
-lr_decay_iters = 32000
+max_iters      = 30000  # Stage 1 best = step 25000; +5000 steps fine-tune
+lr_decay_iters = 30000
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
 ckpt_interval_secs = 900
