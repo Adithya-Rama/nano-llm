@@ -33,7 +33,7 @@ log_interval          = 10
 eval_iters            = 200         # more eval iters — larger val set now
 eval_only             = False
 always_save_checkpoint = False
-init_from             = 'scratch'
+init_from             = 'resume'    #scratch
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 wandb_log      = True
@@ -70,7 +70,7 @@ label_smoothing = 0.0
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 1e-3
-max_iters     = 12000   # 12K steps — 9 passes over 22M token corpus
+max_iters     = 18000   # 12K steps — 9 passes over 22M token corpus
                         # More steps than original 8K because dataset is 5x larger
 weight_decay  = 0.1
 beta1         = 0.9
@@ -80,7 +80,7 @@ grad_clip     = 1.0
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
 warmup_iters   = 200     # ~1.7% of 12K run
-lr_decay_iters = 12000   # must match max_iters
+lr_decay_iters = 18000   # must match max_iters
 min_lr         = 1e-4
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
