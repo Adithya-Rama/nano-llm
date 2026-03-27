@@ -33,12 +33,12 @@ log_interval          = 10
 eval_iters            = 200         # more eval iters — larger val set now
 eval_only             = False
 always_save_checkpoint = False
-init_from             = 'resume'    #scratch
+init_from             = 'scratch'    #scratch
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 wandb_log      = True
 wandb_project  = 'rocstories-nanogpt'
-wandb_run_name = 't3-synthetic-7L-31.8M-gptoss120b'
+wandb_run_name = 't3-synthetic-v2-31.8M-100k-diverse'
 
 # ── Dataset ──────────────────────────────────────────────────────────────────
 dataset = 'rocstories_synthetic'    # synthetic + original mix
@@ -70,7 +70,7 @@ label_smoothing = 0.0
 
 # ── Optimizer ────────────────────────────────────────────────────────────────
 learning_rate = 1e-3
-max_iters     = 18000   # 12K steps — 9 passes over 22M token corpus
+max_iters     = 20000   # 12K steps — 9 passes over 22M token corpus
                         # More steps than original 8K because dataset is 5x larger
 weight_decay  = 0.1
 beta1         = 0.9
@@ -80,7 +80,7 @@ grad_clip     = 1.0
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
 warmup_iters   = 200     # ~1.7% of 12K run
-lr_decay_iters = 18000   # must match max_iters
+lr_decay_iters = 20000   # must match max_iters
 min_lr         = 1e-4
 
 # ── Colab resilience ─────────────────────────────────────────────────────────

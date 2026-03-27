@@ -1,6 +1,6 @@
 {
-  "temperature": 0.72,
+  "temperature": 0.80,
   "top_k": 50,
   "top_p": 0.92,
-  "repetition_penalty": 1.1
+  "repetition_penalty": 1.03
 }
