@@ -73,8 +73,8 @@ grad_clip     = 1.0
 # ── LR schedule ──────────────────────────────────────────────────────────────
 decay_lr       = True
 warmup_iters   = 100     # short re-warmup after dataset switch
-max_iters      = 30000  # Stage 1 best = step 25000; +5000 steps fine-tune
-lr_decay_iters = 30000
+max_iters      = 45000  # Stage 1 best = step 25000; +5000 steps fine-tune
+lr_decay_iters = 45000
 
 # ── Colab resilience ─────────────────────────────────────────────────────────
 ckpt_interval_secs = 900
