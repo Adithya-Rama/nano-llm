@@ -15,7 +15,10 @@ start = "\n" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE
 num_samples = 10 # number of samples to draw
 max_new_tokens = 500 # number of tokens generated in each sample
 temperature = 0.8 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
-top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 probability
+top_k = 50 # retain only the top_k most likely tokens, clamp others to have 0 probability
+top_p = 1.0 # nucleus sampling; 1.0 = disabled (override e.g. 0.92 to match sample_params.json)
+repetition_penalty = 1.0 # 1.0 = off; >1 penalises repeated tokens (see model.generate)
+stop_token = -1 # -1 = no early stop; 50256 = GPT-2 <|endoftext|> (override via --stop_token=50256)
 seed = 1337
 device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1', etc.
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32' or 'bfloat16' or 'float16'
@@ -87,6 +90,12 @@ x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
 with torch.no_grad():
     with ctx:
         for k in range(num_samples):
-            y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
+            _stop = None if stop_token < 0 else stop_token
+            y = model.generate(
+                x, max_new_tokens,
+                temperature=temperature, top_k=top_k,
+                top_p=top_p, repetition_penalty=repetition_penalty,
+                stop_token=_stop,
+            )
             print(decode(y[0].tolist()))
             print('---------------')

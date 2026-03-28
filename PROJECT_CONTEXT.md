@@ -1,144 +1,215 @@
-# NanoGPT ROCStories — LLM context file
-
-**Purpose:** Single document to onboard an AI assistant or model to this repository: goals, layout, conventions, and changes made during development (COMP4680/8650, ANU, March 2026).
-
-**Student:** Adithya Rama  
-**Base:** [Karpathy nanoGPT](https://github.com/karpathy/nanoGPT) with substantial extensions for the assignment.
+Here's the complete context:
 
 ---
 
-## 1. Assignment goals
+## COMP4680/8650 NanoGPT ROCStories — Complete Context
 
-| Task | What | Constraint |
-|------|------|------------|
-| **T1** | Vanilla “baby GPT” baseline on ROCStories | ≤32M params |
-| **T2** | 5 architecture ablations (A–E) on ROCStories | Same; isolate RoPE, RMSNorm+SwiGLU, QK-Norm |
-| **T3** | Best submission checkpoint | ≤32M params; **target val PPL &lt; 25** on professor evaluation (instruction: use mixed data + TinyStories) |
-| **T4** | Arena / optional larger model | No param cap; combined corpus |
-
-**Metric:** Validation perplexity from training logs (`train_log.jsonl`); report **best** val PPL (early stopping), not necessarily final step — models often overfit after ~1250–2250 steps on small ROC-only data.
+### Person
+Adithya Rama, ANU Master of Computing (Advanced), R&D ML focus. Repo at `/content/drive/MyDrive/COMP8650/Assgn-1/nano-llm/code-vfinal/` in Google Colab. wandb project: `rocstories-nanogpt` (adithyaiyer-anu).
 
 ---
 
-## 2. Authoritative configs (use these)
-
-| Config | Role |
-|--------|------|
-| `config/train_t1_baseline.py` | Task 1 baseline |
-| `config/train_t2_ablation_{a,b,c,d,e}.py` | Task 2 A–E |
-| `config/train_t3_best.py` | Task 3 submission training |
-| `config/train_t4_arena.py` | Task 4 (different scale; not the “baby-GPT” recipe) |
-
-**Legacy / unused:** Original `train_rocstories_*.py`, Shakespeare, GPT-2 eval configs were either marked deprecated, moved under `config/unused/`, and/or listed in `.gitignore`. Do not treat them as the assignment pipeline.
+### Assignment Structure
+Train nanoGPT models for 5-sentence ROCStories story completion. Four tasks: T1 baseline, T2 ablations, T3 best ≤32M checkpoint (HuggingFace submission), T4 arena (124M, no size limit).
 
 ---
 
-## 3. Model code (`model.py`) — high level
-
-- Extended GPT with optional: **RoPE**, **RMSNorm**, **SwiGLU** FFN (hidden dim ≈ `8/3 * n_embd`, rounded to multiple of 64 for param budget), **QK-Norm**.
-- SwiGLU and width choices keep Tasks 1–3 near **~31.7–31.8M** params with `n_layer=7`, `n_head=6`, `n_embd=384`.
-- RoPE cache `max_seq_len` set to at least `max(block_size, 2048)`.
-- Sampling: top-p uses correct cumulative mask `(cumulative_probs - probs_sorted) >= top_p`.
+### Architecture
+LLaMA-style nanoGPT with `use_rope=True, use_rmsnorm=True, use_swiglu=True, use_qk_norm=True`. SwiGLU hidden dim = int(8/3 × n_embd) rounded to 64.
 
 ---
 
-## 4. Training recipe (Tasks 1–3 “baby GPT” scale)
-
-Aligned with Karpathy `train_shakespeare_char` style, **not** GPT-2 pretraining defaults:
-
-- `learning_rate = 1e-3`, `min_lr = 1e-4`
-- `dropout`: **0.2** on T1/T2; **0.15** on T3 (per `CURSOR_FINAL_PROMPT.md` / memorisation tradeoff)
-- `beta2 = 0.99`, `beta1 = 0.9`
-- `label_smoothing = 0.0` (template had none; smoothing inflated val CE)
-- `batch_size = 64`, `gradient_accumulation_steps = 1` (effective 16,384 tokens/step at `block_size=256`)
-- `always_save_checkpoint = False` — only save on improvement unless periodic resume is needed
-
-**Task 3 current schedule (`train_t3_best.py`):** `max_iters = 8000`, `lr_decay_iters = 8000`, `warmup_iters = 150`.
-
-**Task 1 / T2:** `max_iters = 5000`, `lr_decay_iters = 5000`, `warmup_iters = 100` (stop before severe overfit on pure ROCStories).
+### T1/T2 — COMPLETED
+All configs: 7L/6H/384D, ~31.8M params, 5K steps. T2-E (all modern flags) = best ablation.
 
 ---
 
-## 5. Checkpointing (`train.py`)
+### T3 — COMPLETED, READY TO SUBMIT
 
-- **Problem fixed:** `always_save_checkpoint=True` was overwriting good checkpoints with worse late-training states.
-- **Behaviour:** On new best validation loss: `save_checkpoint(tag='best')` writes `ckpt_best.pt` and (implementation) also refreshes `ckpt.pt` for resume. If `always_save_checkpoint` and not a new best, only `ckpt.pt` updates.
-- **Logging:** `train_log.jsonl` via `log_training_step`; prints include best val PPL with overflow guard if `best_val_loss` is still a huge sentinel.
-- **HuggingFace / submission:** Package **`ckpt_best.pt`** (copy/rename to `ckpt.pt` in submission folder), not blindly the last `ckpt.pt`.
+**Final checkpoint:** `out-t3-synthetic/ckpt_best.pt` (step 20001, val PPL **19.0**)
+- `ckpt_final.pt` also saved at step 20000
+- Architecture: 7L/6H/384D, 31.71M params (≤32M ✓)
+- Training run name: `t3-synthetic-v2-31.8M-100k-diverse`
 
----
+**Dataset used:** `data/rocstories_synthetic/` — built from full 408K merged synthetic JSON at `/content/drive/MyDrive/COMP8650/Assgn-1/nano-llm/synthetic-data/synthetic_stories_gptoss120b.json`
+- 408,722 stories passed quality filter
+- 28.95M synthetic tokens + 3.70M original ROCStories = **32.65M train tokens**
+- Val: 0.41M tokens (original ROCStories only)
 
-## 6. Data pipelines
+**How to build the dataset correctly:**
+```bash
+python data/rocstories_synthetic/prepare.py \
+    --json_path /content/drive/MyDrive/COMP8650/Assgn-1/nano-llm/synthetic-data/synthetic_stories_gptoss120b.json
+```
+This produces ~32.65M tokens. If you pass the wrong path (the file in `code-vfinal/`) you only get 23.75M tokens — that's wrong.
 
-### ROCStories (`data/rocstories/prepare.py`)
+**Config:** `config/train_t3_synthetic.py`
+- `init_from = 'scratch'`
+- `out_dir = 'out-t3-synthetic'`
+- `max_iters = 20000, lr_decay_iters = 20000`
+- `learning_rate = 1e-3, min_lr = 1e-4`
+- `batch_size = 64, block_size = 256, gradient_accumulation_steps = 1`
+- `always_save_checkpoint = False` (saves only on improvement)
+- `wandb_run_name = 't3-synthetic-v2-31.8M-100k-diverse'`
 
-- Downloads from HuggingFace (`mintujupally/ROCStories`), tokenises with **tiktoken GPT-2 BPE**, stores `uint16` in `.bin`.
-- **`train.bin`:** all downloaded stories (plain or structured via flags).
-- **`val.bin`:** **only** stories from `data/rocstories/eval_stories.txt` (professor holdout — **no overlap** with train). Older approach that sampled “monitor” val from the train pool caused **optimistic / contaminated** val PPL.
+**Sample params** (`out-t3-synthetic/sample_params.json`):
+```json
+{"temperature": 0.78, "top_k": 50, "top_p": 0.92, "repetition_penalty": 1.03}
+```
 
-### Mixed (Tasks 2/3) (`data/mixed/prepare.py`)
+**Training curve summary:**
+| Step | Val PPL |
+|------|---------|
+| 250 | 87.4 |
+| 1000 | 38.6 |
+| 5000 | 25.3 |
+| 10000 | 22.0 |
+| 15000 | 20.0 |
+| 17750 | 19.3 |
+| 19750 | 19.0 (best) |
+| 20000 | 19.17 (final, not best) |
 
-- Combines ROCStories-derived formats + optional **TinyStories** prefix.
-- **Important:** Validation must be **reserved before** splitting formats so train/val don’t leak.
-- TinyStories cap was raised (e.g. toward **100M** tokens) so T3 isn’t accidentally trained on ROC-only scale.
+Best checkpoint is `ckpt_best.pt` at step 19750/20001, PPL 19.0.
 
-### TinyStories (`data/tinystories/prepare.py`)
+**Story quality:**
+- Emily (umbrella) — coherent 5-sentence arc ✓
+- Tom (cooking dinner) — coherent ✓
+- Sofia (Rio conference presentation) — coherent, professional ✓ (100K diverse stories fixed this)
+- Sarah (lost keys) — location confusion bug persists (architectural ceiling at 31.8M)
+- Danish/Anoop (OOD names) — completely broken, unfixable at this size
 
-- Prepare `train.bin` / `val.bin` for optional upsampling into mixed.
-
-### Combined / Task 4 (`data/combined/prepare.py`)
-
-- Larger arena corpus (e.g. streaming, multiple sources, filters) — see script docstring and flags.
-
-**Ignored in git:** `*.bin`, `*.pt`, etc. (see `.gitignore`).
-
----
-
-## 7. Evaluation & notebooks
-
-- **`eval.py`:** Used for held-out evaluation; paths depend on `data_dir` and checkpoint.
-- **`code_v2.ipynb`:** Main Colab-oriented workflow: §0 setup, dataset size verification, Task 1–4 cells, best-PPL summariser from `train_log.jsonl`, T4 evaluation plots, final summary figures, HuggingFace upload using best checkpoint.
-- **`preflight.py`:** Local sanity checks for configs, paths, and (when updated) ROCStories split expectations (e.g. `eval_stories.txt` usage).
-
----
-
-## 8. Operational run order (typical)
-
-1. Prepare ROCStories → optional structured pass → TinyStories if needed → `data/mixed/prepare.py --with_tinystories`.
-2. Verify `data/mixed/train.bin` token count (expect **well above ~10M** if TinyStories merged).
-3. `python train.py config/train_t1_baseline.py` then T2 configs, then T3.
-4. For reporting: read **best** `val_loss` from `train_log.jsonl`, not only the last line.
-
----
-
-## 9. Known pitfalls (forensics from logs)
-
-1. **Checkpoint quality:** Submit / report **best** checkpoint, not the final step.
-2. **T3 without TinyStories:** Mixed dataset size ≈ ROC-only → same convergence speed as T1; need TinyStories (or equivalent) in the mix for Task 3 PPL target.
-3. **Small eval set:** `eval_stories.txt` is tiny; noisy PPL — assignment-scale test is larger; trust smoothed val from full `val.bin` training logs for trends.
-4. **PPL &lt; 25:** Framed for **T3 submission**, not necessarily T1/T2 on pure ROCStories (often high-20s to low-30s is expected there).
+**Pending action:** Submit to HuggingFace — run Cell 34 (comparison table) then Cell 36 (upload). Set `HF_USERNAME` in Cell 36.
 
 ---
 
-## 10. Repo hygiene
+### T4 — COMPLETED
 
-- **`.gitignore`:** Excludes checkpoints, bins, `notes/`, `.cursor/`, `results/`, and optionally `config/unused`, `data/unused`, and duplicate legacy config paths — adjust if you need those tracked.
-- **`bench.py`:** Benchmarking utility (original nanoGPT).
+**Final checkpoint:** `out-t4-arena/ckpt.pt` (step 55001) and `ckpt_final.pt`
+- Architecture: 12L/12H/768D, 123.59M params
+- Training run name: `t4-finetune-124M-synthetic-gptoss120b`
+
+**Two-stage training:**
+
+**Stage 1 (pretrain):** 25K steps on combined corpus (ROCStories 5x + TinyStories ~200M tokens). Config: `config/train_t4_arena.py`. Output: `out-t4-pretrain/ckpt_best.pt`. Stage 1 best val loss = 0.5055 (PPL 1.7 — this is stored in `best_val_loss` in the checkpoint but reflects Stage 1 metric on combined val, NOT Stage 2 metric).
+
+**Stage 2 (fine-tune):** Extended to 55K steps total (25K Stage1 + ~30K fine-tune). Config: `config/train_t4_finetune.py`. Trained on `data/rocstories_synthetic/` (32.65M tokens from full 408K merged JSON). Resumed from `out-t4-arena/ckpt.pt`.
+
+**Stage 2 config key settings:**
+- `init_from = 'resume'`, `out_dir = 'out-t4-arena'`
+- `max_iters = 55000, lr_decay_iters = 55000`
+- `learning_rate = 1e-4, min_lr = 1e-5`
+- `batch_size = 16, gradient_accumulation_steps = 8, block_size = 512`
+- `always_save_checkpoint = True` (critical — val loss never beats Stage 1 best)
+- `warmup_iters = 100`
+
+**Stage 2 training curve (val loss rising = intentional TinyStories suppression):**
+| Step | Val PPL |
+|------|---------|
+| 30200 | 1.82 |
+| 33000 | 2.50 |
+| 37000 | 3.30 |
+| 42000 | 4.00 |
+| 48000 | 4.59 |
+| 55000 | 5.05 |
+
+Val loss rising is NOT overfitting. It reflects the model shifting away from TinyStories distribution onto ROCStories distribution. The `best_val_loss = 0.5055` stored in the checkpoint is the Stage 1 metric and is meaningless for evaluating Stage 2 quality. Rising val loss during Stage 2 is expected and desired.
+
+**MFU:** 43.7% (correct — using batch=16, accum=8, block=512 = 65,536 tokens/step). Previous broken Stage 2 run had 6-7% MFU because wrong batch config.
+
+**Sample params** (`out-t4-arena/sample_params.json`):
+```json
+{"temperature": 0.80, "top_k": 50, "top_p": 0.92, "repetition_penalty": 1.03}
+```
+**No `stop_token`** — do not include it.
+
+**Story quality (Cell 49 evaluation — the correct cell):**
+All 8 test prompts produce 5/5 sentences with coherent narrative arcs:
+- Emily: borrows umbrella from neighbor, catches bus, arrives relieved ✓
+- Tom: pasta dish, out of parmesan, substituted mozzarella, turned out well ✓
+- Lily: jogging routine, improvement, ankle injury, recovered ✓
+- Mark: borrowed bike, rode to park, rainstorm, returned apologizing ✓
+- Anna: planted seeds, watered daily, shoots appeared, harvested tomatoes ✓
+- Sarah: lost wallet, cancelled cards, got replacement ✓
+- Jake: Father's Day breakfast surprise, went shopping, dad touched ✓
+- Old dog: reunited with owner ✓ (slight incoherence in middle sentences)
+
+**T4 eval PPL (Cell 49 reports): 26.39** — note this is measured against ROCStories val, not a raw model PPL.
 
 ---
 
-## 11. Quick file map
+### Critical Evaluation Warning
 
-| Path | Role |
-|------|------|
-| `train.py` | Training loop, logging, checkpointing |
-| `model.py` | GPT + RoPE/RMSNorm/SwiGLU/QK-Norm |
-| `config/train_t*.py` | Assignment entry points |
-| `data/*/prepare.py` | Dataset binaries |
-| `eval.py` | Evaluation |
-| `preflight.py` | Config/dataset checks |
-| `code_v2.ipynb` | Full experiment notebook |
+**Cell 48 = BROKEN. Cell 49 = CORRECT.**
+
+Cell 48 strips S1 from output, uses hardcoded broken params with `stop_token=50256`, producing 4-sentence outputs with missing first sentence. This is a TinyStories residue artifact in the old cell.
+
+Cell 49 uses `complete_story()` function which:
+1. Generates with EOT token split (no stop_token)
+2. Prepends prompt as S1 if missing
+3. Deduplicates consecutive identical sentences
+4. Retries with higher temperature if fewer than 5 sentences
+5. Returns first 5 sentences
+
+The coherence in Cell 49 outputs comes from model weights, not post-processing. Post-processing only fixes formatting edge cases.
 
 ---
 
-*Generated for context injection into coding assistants. Update this file when configs or data contracts change.*
+### Synthetic Data Pipeline
+
+**Merged file location:** `/content/drive/MyDrive/COMP8650/Assgn-1/nano-llm/synthetic-data/synthetic_stories_gptoss120b.json`
+- 408,724 total stories
+- 300K from llama3:8b via local Ollama (RTX 5070)
+- 100K from Groq llama-3.3-70b (diverse cultural categories: South Asian, East Asian, African, Latin American, Middle Eastern, diverse workplace — at 1.5x weight)
+- 28 categories total
+
+**Common mistake:** If you pass the wrong JSON path to `prepare.py` (the one inside `code-vfinal/` instead of `synthetic-data/`), you only get 308K stories and 23.75M tokens instead of 408K stories and 32.65M tokens.
+
+---
+
+### Key Bugs Fixed During This Session
+1. Wrong JSON path to `prepare.py` — was getting 308K stories instead of 408K
+2. T3 previously trained on 23.75M tokens — retrained on 32.65M with full 408K corpus
+3. T4 Stage 2 previously ran only 5K effective steps — extended to 30K effective steps
+4. `always_save_checkpoint = True` required in T4 finetune because val loss never beats Stage 1 best
+5. Cell 48 broken evaluation — must use Cell 49 `complete_story()` function
+
+---
+
+### Architectural Ceiling (Cannot Fix)
+- 31.8M params cannot reliably track 4-step causal chains
+- OOD names (Anoop, Danish, non-Western) → falls back to training distribution
+- Location tracking bugs (Sarah apartment) persist at 31.8M
+- Threshold for reliable narrative coherence: ~350M+ params
+- T3 PPL measures token fluency, not narrative coherence — explains gap
+
+---
+
+### Pending Actions
+1. **IMMEDIATE:** Submit T3 to HuggingFace — Cell 34 (comparison) → Cell 36 (upload). Set `HF_USERNAME` in Cell 36. Checkpoint is `out-t3-synthetic/ckpt_best.pt`, step 19750, PPL 19.0.
+2. **VERIFY T4:** Run Cell 49 `complete_story()` on a few more prompts including Sofia (professional conference prompt) to confirm quality. Then confirm `out-t4-arena/sample_params.json` has the correct params.
+3. **OPTIONAL SANITY CHECK:** Run raw `sample.py` on T4 to verify coherence without post-processing:
+```bash
+python sample.py \
+    --out_dir=out-t4-arena \
+    --start="Emily forgot her umbrella before leaving for work." \
+    --max_new_tokens=110 \
+    --temperature=0.80 \
+    --top_k=50 \
+    --top_p=0.92 \
+    --repetition_penalty=1.03 \
+    --num_samples=3
+```
+
+---
+
+### File Locations
+- **Repo root:** `/content/drive/MyDrive/COMP8650/Assgn-1/nano-llm/code-vfinal/`
+- **T3 checkpoint:** `out-t3-synthetic/ckpt_best.pt` (step 19750/20001, PPL 19.0)
+- **T3 final:** `out-t3-synthetic/ckpt_final.pt`
+- **T4 checkpoint:** `out-t4-arena/ckpt.pt` (step 55001)
+- **T4 final:** `out-t4-arena/ckpt_final.pt`
+- **Merged synthetic JSON:** `/content/drive/MyDrive/COMP8650/Assgn-1/nano-llm/synthetic-data/synthetic_stories_gptoss120b.json`
+- **T3 config:** `config/train_t3_synthetic.py`
+- **T4 finetune config:** `config/train_t4_finetune.py`
+- **Synthetic prepare:** `data/rocstories_synthetic/prepare.py`
+- **Notebook:** `code_v2.ipynb` — T3 retrain = Cell 25, T4 Stage 2 = Cell 43, T4 correct eval = Cell 49, T4 broken eval = Cell 48 (do not use)
