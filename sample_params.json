@@ -2,5 +2,6 @@
   "temperature": 0.80,
   "top_k": 50,
   "top_p": 0.92,
-  "repetition_penalty": 1.03
+  "repetition_penalty": 1.03,
+  "stop_token": 50256
 }

@@ -509,7 +509,7 @@ class GPT(nn.Module):
                  temperature: float = 1.0, top_k: int = None,
                  top_p: float = 1.0,
                  repetition_penalty: float = 1.0,
-                 stop_token: int = None) -> torch.Tensor:
+                 stop_token: int = 50256) -> torch.Tensor:
         """Autoregressive generation with temperature, top-k, nucleus (top-p),
         and repetition penalty sampling.
 
