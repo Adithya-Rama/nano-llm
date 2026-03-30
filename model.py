@@ -505,10 +505,10 @@ class GPT(nn.Module):
         return flops_achieved / flops_promised
 
     @torch.no_grad()
-    def generate(self, idx: torch.Tensor, max_new_tokens: int,
-                 temperature: float = 1.0, top_k: int = None,
-                 top_p: float = 1.0,
-                 repetition_penalty: float = 1.0,
+    def generate(self, idx: torch.Tensor, max_new_tokens: int = 110,
+                 temperature: float = 0.80, top_k: int = 50,
+                 top_p: float = 0.92,
+                 repetition_penalty: float = 1.03,
                  stop_token: int = 50256) -> torch.Tensor:
         """Autoregressive generation with temperature, top-k, nucleus (top-p),
         and repetition penalty sampling.
