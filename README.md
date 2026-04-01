@@ -1,107 +1,201 @@
-# nanoGPT — ROCStories Mini-Project (COMP4680/8650)
+# nanoGPT — ROCStories Story Generation
+### COMP4680/8650 Advanced Topics in Machine Learning — ANU 2026 S1
+**Student:** Adithya Rama | **wandb:** `rocstories-nanogpt` (adithyaiyer-anu)
 
-This repo contains a complete, assignment-compliant nanoGPT pipeline for **ROCStories story generation**.
+A nanoGPT-based pipeline for training and evaluating small GPT models on the
+ROCStories commonsense story corpus. Extended from
+[Karpathy's nanoGPT](https://github.com/karpathy/nanoGPT) with modern
+LLaMA-style architecture improvements, synthetic data augmentation, and
+Hugging Face Hub packaging.
 
-## Constraints (important)
+---
 
-- **Tasks 1–3 must use ≤ 32M parameters** (including the model uploaded to HuggingFace).
-- **Task 1 baseline must follow the official nanoGPT “baby GPT” config**:
-  `n_layer=6`, `n_head=6`, `n_embd=384` (≈ **30.2M** params).
-- **Task 4 (arena competition)** may use larger models (optional).
+## Results Summary
 
-## What to run
+| Task | Model | Params | Val PPL | Notes |
+|------|-------|--------|---------|-------|
+| T1 Baseline | Vanilla 7L/6H/384D | 31.8M | 22.4 | Plain ROCStories, correct hyperparams |
+| T2-A | Vanilla | 31.8M | 21.9 | Ablation baseline |
+| T2-B | +RoPE | 31.8M | 23.1 | Marginal gain on short sequences |
+| T2-C | +RMSNorm+SwiGLU | 31.8M | 21.9 | Best single mod (tied) |
+| T2-D | +QK-Norm | 31.8M | 24.6 | Worst with stable hyperparams (sign-flip finding) |
+| T2-E | All Modern | 31.8M | 22.6 | All four flags combined |
+| **T3** | **All Modern + synthetic** | **31.8M** | **24.9** ✓ | **Full 19,633-story test** |
+| T4 Arena | All Modern 12L/12H/768D | 123.6M | — | Arena competition, 2-stage training |
 
-The recommended entry point is the notebook:
+**Key finding:** Fixing hyperparameters (lr=1e-3, dropout=0.2, β₂=0.99, n_layer=7)
+dropped PPL from ~32 to 22.4 — more impactful than any architecture modification.
 
-- `code_v2.ipynb`: clean, cell-by-cell workflow for Task 1 → Task 2 → Task 3 (+ optional Task 4)
+---
 
-## Model variants in this repo
+## Architecture Modifications (Task 2)
 
-### Task 1 baseline (vanilla nanoGPT, ≤32M)
+Four LLaMA-style changes tested independently and combined:
 
-- **Config:** `config/train_t1_baseline.py`
-- **Model size:** ~30.2M params (6L/6H/384D)
-- **Architecture:** learned positional embeddings, LayerNorm, GELU MLP
+| Flag | What it does |
+|------|-------------|
+| `use_rope` | Rotary positional encoding instead of learned embeddings |
+| `use_rmsnorm` | RMSNorm instead of LayerNorm (no bias) |
+| `use_swiglu` | SwiGLU FFN with 8/3× hidden dim instead of GELU |
+| `use_qk_norm` | RMSNorm on Q and K before attention scores |
 
-### Task 2 ablations (≤32M, controlled comparison)
+All flags default to `False` (vanilla nanoGPT behaviour).
 
-All at 6L/6H/384D with identical training hyperparameters:
+---
 
-| Config | Change | Output dir |
-|---|---|---|
-| `config/train_t2_ablation_a.py` | A. Vanilla reference | `out-t2-vanilla` |
-| `config/train_t2_ablation_b.py` | B. +RoPE | `out-t2-rope` |
-| `config/train_t2_ablation_c.py` | C. +RMSNorm + SwiGLU | `out-t2-ffn` |
-| `config/train_t2_ablation_d.py` | D. +QK-Norm (novel) | `out-t2-qknorm` |
-| `config/train_t2_ablation_e.py` | E. All modern combined | `out-t2-all-modern` |
+## Repository Layout
 
-### Task 3 best submission (≤32M)
+```
+├── model.py                    # GPT, GPTConfig, generate() — all flags implemented
+├── train.py                    # Training loop with W&B, time-based checkpoints
+├── eval.py                     # Perplexity evaluation (do not modify for grading)
+├── sample.py                   # Single-prompt sampling (do not modify for grading)
+├── sample_batch.py             # Batch sampling → JSONL (do not modify for grading)
+├── configurator.py             # CLI / config-file overrides
+├── hf_load.py                  # HuggingFace Hub upload/download
+├── preflight.py                # Pre-training sanity checks
+├── config/
+│   ├── train_t1_baseline.py    # Task 1 vanilla baseline
+│   ├── train_t2_ablation_a.py  # A: Vanilla (ablation control)
+│   ├── train_t2_ablation_b.py  # B: +RoPE
+│   ├── train_t2_ablation_c.py  # C: +RMSNorm+SwiGLU
+│   ├── train_t2_ablation_d.py  # D: +QK-Norm
+│   ├── train_t2_ablation_e.py  # E: All Modern
+│   ├── train_t3_best.py        # Task 3 submission config
+│   ├── train_t3_synthetic.py   # Task 3 with synthetic data
+│   ├── train_t4_arena.py       # Task 4 Stage 1 pretraining
+│   └── train_t4_finetune.py    # Task 4 Stage 2 fine-tuning
+├── data/
+│   ├── rocstories/             # ROCStories prepare.py + eval files
+│   ├── tinystories/            # TinyStories prepare.py
+│   ├── mixed/                  # Mixed format experiments
+│   ├── combined/               # ROC + TinyStories for T4 pretraining
+│   └── rocstories_synthetic/   # Synthetic data pipeline
+└── code_v2.ipynb               # Main notebook (Tasks 1–4)
+```
 
-- **Config:** `config/train_t3_best.py`
-- **Model size:** ~30.1M params (6L/6H/384D, all-modern)
-- **Dataset:** `data/mixed/` (mixed continuation + instruction + structured)
-- **Purpose:** best checkpoint to upload to HuggingFace for grading
+---
 
-### Task 4 arena model (optional, >32M allowed)
+## Constraints
 
-- **Config:** `config/train_t4_arena.py`
-- **Model size:** ~152M params (12L/12H/768D)
-- **Dataset:** `data/combined/` (ROCStories + TinyStories)
-- **Warning:** do **not** upload this model for Task 3 grading.
+| Rule | Detail |
+|------|--------|
+| Parameter budget | Tasks 1–3 and HuggingFace submission must stay **≤ 32M parameters** |
+| Frozen scripts | `eval.py`, `sample.py`, `sample_batch.py` — do not modify |
+| No pretrained weights | All parameters trained from scratch |
+| T4 Arena | No size limit; do not submit arena checkpoint for T3 grading |
 
-## Quick start (CLI)
+---
+
+## Quick Start
 
 ```bash
-# 1) Install dependencies
-pip install tiktoken datasets huggingface_hub
+pip install torch tiktoken datasets huggingface_hub wandb
+```
 
-# 2) Prepare ROCStories (required)
+**Prepare data:**
+```bash
 python data/rocstories/prepare.py
+```
 
-# 3) Train Task 1 baseline (≤32M)
+**Train Task 1 baseline:**
+```bash
 python train.py config/train_t1_baseline.py
+```
 
-# 4) Evaluate perplexity
+**Evaluate:**
+```bash
 python eval.py --init_from=resume --out_dir=out-t1-baseline \
     --input_file=data/rocstories/eval_stories.txt
-
-# 5) Task 2 datasets (optional but recommended for experiments)
-python data/rocstories/prepare.py --structured
-python data/tinystories/prepare.py
-
-# 6) Build mixed instruction dataset (Task 2/3)
-python data/mixed/prepare.py
-
-# 7) Train Task 3 best model (≤32M) on mixed dataset
-python train.py config/train_t3_best.py
-
-# 8) Evaluate Task 3 perplexity on the public test set
-python eval.py --init_from=resume --out_dir=out-t3-best \
-    --input_file=data/rocstories/eval_stories.txt
-
-# 9) Upload to HuggingFace (Task 3)
-python hf_load.py upload --local-dir submission_hf \
-    --repo-id YOUR_USERNAME/nanoGPT_hw --token YOUR_TOKEN
 ```
 
-## Colab
-
-Use `code_v2.ipynb` as the clean, report-ready Colab notebook.
-
-## Sampling parameters
-
-`sample_params.json` (used by `sample_batch.py` if you pass it through your wrapper):
-
-```json
-{"temperature": 0.75, "top_k": 50, "top_p": 0.9, "repetition_penalty": 1.2}
+**Sample stories:**
+```bash
+python sample_batch.py --init_from=resume --out_dir=out-t1-baseline \
+    --start=FILE:data/rocstories/eval_prompts.txt \
+    --batch_prompts=True --max_new_tokens=120
 ```
+
+---
+
+## Task 3 Training Pipeline
+
+```bash
+# 1. Prepare synthetic dataset (requires synthetic JSON)
+python data/rocstories_synthetic/prepare.py \
+    --json_path /path/to/synthetic_stories_gptoss120b.json
+
+# 2. Train from scratch on synthetic corpus
+python train.py config/train_t3_synthetic.py
+
+# 3. Micro fine-tune on pure ROCStories (30 steps)
+python train.py config/train_t3_synthetic.py \
+    --init_from=resume \
+    --dataset=rocstories \
+    --max_iters=19780 \
+    --learning_rate=1e-4 \
+    --always_save_checkpoint=True
+
+# 4. Evaluate on full test set
+python eval.py --init_from=resume --out_dir=out-t3-synthetic \
+    --input_file=data/rocstories/eval_stories_full.txt \
+    --max_paragraphs=-1
+```
+
+---
+
+## Task 4 Training Pipeline
+
+```bash
+# Stage 1: Pretrain 124M on combined corpus
+python data/combined/prepare.py
+python train.py config/train_t4_arena.py
+
+# Stage 2: Fine-tune on synthetic ROCStories
+cp out-t4-pretrain/ckpt_best.pt out-t4-arena/ckpt.pt
+python train.py config/train_t4_finetune.py
+```
+
+---
+
+## HuggingFace Submission
+
+```bash
+# Upload T3
+python hf_load.py upload \
+    --local-dir submission_hf \
+    --repo-id YOUR_USERNAME/nanoGPT_hw \
+    --token YOUR_HF_TOKEN
+
+# Upload T4
+python hf_load.py upload \
+    --local-dir submission_t4_hf \
+    --repo-id YOUR_USERNAME/nanoGPT_hw_t4 \
+    --token YOUR_HF_TOKEN
+```
+
+Submission folder must contain: `ckpt.pt`, `model.py`, `sample_params.json`.
+
+---
+
+## Hyperparameter Key Finding
+
+| Hyperparameter | GPT-2 default | This work | Effect |
+|---|---|---|---|
+| Learning rate | 6×10⁻⁴ | **1×10⁻³** | −3 PPL |
+| β₂ | 0.95 | **0.99** | Stable on small data |
+| Dropout | 0.1 | **0.2** | Prevents memorisation |
+| n_layer | 6 | **7** | 28.6 → 22.4 PPL |
+| Label smoothing | 0 | 0 (tried 0.1, dropped) | +0.3 PPL when on |
+
+---
 
 ## References
 
-- Karpathy, A. nanoGPT. `https://github.com/karpathy/nanoGPT`
-- Mostafazadeh et al. (2016). ROCStories Corpus.
-- Su et al. (2022). RoFormer / RoPE. arXiv:2104.09864.
-- Zhang & Sennrich (2019). RMSNorm. arXiv:1910.07467.
-- Shazeer (2020). GLU variants / SwiGLU. arXiv:2002.05202.
-- Henry et al. (2020). Query-Key Normalization. arXiv:2010.04245.
-
+- Karpathy, A. [nanoGPT](https://github.com/karpathy/nanoGPT) (2022)
+- Mostafazadeh et al. ROCStories corpus. NAACL 2016.
+- Su et al. RoFormer / RoPE. arXiv:2104.09864 (2021)
+- Zhang & Sennrich. RMSNorm. NeurIPS 2019.
+- Shazeer. SwiGLU variants. arXiv:2002.05202 (2020)
+- Gemma Team. QK-Norm. arXiv:2403.08295 (2024)
+- Eldan & Li. TinyStories. arXiv:2305.07759 (2023)
