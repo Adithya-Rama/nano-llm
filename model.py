@@ -506,9 +506,9 @@ class GPT(nn.Module):
 
     @torch.no_grad()
     def generate(self, idx: torch.Tensor, max_new_tokens: int = 110,
-                 temperature: float = 0.8, top_k: int = 50,
-                 top_p: float = 0.92,
-                 repetition_penalty: float = 1.03,
+                 temperature: float = 0.70, top_k: int = 40,
+                 top_p: float = 0.88,
+                 repetition_penalty: float = 1.05,
                  stop_token: int = 50256) -> torch.Tensor:
         """Autoregressive generation with temperature, top-k, nucleus (top-p),
         and repetition penalty sampling.
